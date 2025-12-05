@@ -23,12 +23,12 @@ size_t bufferIndex = 0;
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
         deviceConnected = true;
-        Serial.println("Client connected");
+        Serial.println("debug:Client connected");
     }
 
     void onDisconnect(BLEServer* pServer) {
         deviceConnected = false;
-        Serial.println("Client disconnected");
+        Serial.println("debug:Client disconnected");
     }
 };
 
@@ -56,7 +56,7 @@ void setup() {
   pAdvertising->setMinPreferred(0x0);
   BLEDevice::startAdvertising();
 
-  Serial.println("BLE advertising started");
+  Serial.println("debug:BLE advertising started");
 
   // ESP32 S3 built-in pins
   // setup 42 PDM clock and 41 PDM data pins
@@ -64,7 +64,7 @@ void setup() {
 
   // start I2S at 16 kHz with 16-bits per sample
   if (!I2S.begin(I2S_MODE_PDM_RX, 16000, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO)) {
-    Serial.println("Failed to initialize I2S!");
+    Serial.println("debug:Failed to initialize I2S!");
     while (1); // do nothing
   }
 }
@@ -74,7 +74,7 @@ void loop() {
   if (!deviceConnected && oldDeviceConnected) {
     delay(500);
     pServer->startAdvertising();
-    Serial.println("Restarting advertising");
+    Serial.println("debug:Restarting advertising");
     oldDeviceConnected = deviceConnected;
     bufferIndex = 0;  // Reset buffer on disconnect
   }

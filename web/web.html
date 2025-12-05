@@ -10,7 +10,12 @@
 
     <div>
       <button id="connectBtn">Connect BLE</button>
-      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="disconnectBtn" disabled>Disconnect BLE</button>
+    </div>
+    <br />
+    <div>
+      <button id="serialConnectBtn">Connect Serial</button>
+      <button id="serialDisconnectBtn" disabled>Disconnect Serial</button>
     </div>
     <br />
     <div>
@@ -18,7 +23,8 @@
       <button id="stopBtn" disabled>Stop</button>
     </div>
 
-    <p>Status: <span id="status">Disconnected</span></p>
+    <p>BLE Status: <span id="status">Disconnected</span></p>
+    <p>Serial Status: <span id="serialStatus">Disconnected</span></p>
     <p>Samples recorded: <span id="sampleCount">0</span></p>
 
     <audio id="audioPlayer" controls></audio>

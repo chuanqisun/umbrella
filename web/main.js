@@ -1,5 +1,6 @@
 import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
+import { SerialConnection } from "./serial.js";
 
 /**
  * AudioRecorderApp - Main application controller
@@ -8,6 +9,7 @@ class AudioRecorderApp {
   constructor() {
     this.ble = new BLEConnection();
     this.audio = new AudioProcessor();
+    this.serial = new SerialConnection();
 
     // DOM elements
     this.elements = {
@@ -18,10 +20,14 @@ class AudioRecorderApp {
       status: document.getElementById("status"),
       sampleCount: document.getElementById("sampleCount"),
       audioPlayer: document.getElementById("audioPlayer"),
+      serialConnectBtn: document.getElementById("serialConnectBtn"),
+      serialDisconnectBtn: document.getElementById("serialDisconnectBtn"),
+      serialStatus: document.getElementById("serialStatus"),
     };
 
     this._setupEventListeners();
     this._setupBLECallbacks();
+    this._setupSerialCallbacks();
   }
 
   _setupEventListeners() {
@@ -29,11 +35,61 @@ class AudioRecorderApp {
     this.elements.disconnectBtn.addEventListener("click", () => this.disconnect());
     this.elements.recordBtn.addEventListener("click", () => this.startRecording());
     this.elements.stopBtn.addEventListener("click", () => this.stopRecording());
+    this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerial());
+    this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerial());
   }
 
   _setupBLECallbacks() {
     this.ble.setDataCallback((buffer) => this._handleAudioData(buffer));
     this.ble.setDisconnectCallback(() => this._handleDisconnect());
+  }
+
+  _setupSerialCallbacks() {
+    this.serial.setDataCallback((data) => this._handleSerialData(data));
+    this.serial.setDisconnectCallback(() => this._handleSerialDisconnect());
+  }
+
+  async connectSerial() {
+    try {
+      await this.serial.connect((status) => this._updateSerialStatus(status));
+      this._setSerialUIState("connected");
+    } catch (err) {
+      console.error("Serial Error:", err);
+      this._updateSerialStatus("Error: " + err.message);
+    }
+  }
+
+  async disconnectSerial() {
+    await this.serial.disconnect();
+    this._handleSerialDisconnect();
+  }
+
+  _handleSerialData(data) {
+    console.log("Serial data received, length:", data.length);
+  }
+
+  _handleSerialDisconnect() {
+    this._setSerialUIState("disconnected");
+    this._updateSerialStatus("Disconnected");
+  }
+
+  _updateSerialStatus(message) {
+    this.elements.serialStatus.textContent = message;
+  }
+
+  _setSerialUIState(state) {
+    const { serialConnectBtn, serialDisconnectBtn } = this.elements;
+
+    switch (state) {
+      case "disconnected":
+        serialConnectBtn.disabled = false;
+        serialDisconnectBtn.disabled = true;
+        break;
+      case "connected":
+        serialConnectBtn.disabled = true;
+        serialDisconnectBtn.disabled = false;
+        break;
+    }
   }
 
   async connect() {

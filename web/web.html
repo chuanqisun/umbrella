@@ -9,7 +9,7 @@
     <h1>ESP32 Audio Recorder</h1>
 
     <div>
-      <button id="connectBtn">Connect Serial</button>
+      <button id="connectBtn">Connect BLE</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
     </div>
     <br />
@@ -24,6 +24,9 @@
     <audio id="audioPlayer" controls></audio>
 
     <script>
+      const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+      const TX_CHAR_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notify: ESP32 -> browser
+
       const connectBtn = document.getElementById("connectBtn");
       const disconnectBtn = document.getElementById("disconnectBtn");
       const recordBtn = document.getElementById("recordBtn");
@@ -32,45 +35,53 @@
       const sampleCountDisplay = document.getElementById("sampleCount");
       const audioPlayer = document.getElementById("audioPlayer");
 
-      let port;
-      let reader;
-      let inputDone;
-      let inputStream;
+      let device = null;
+      let charRx = null;
       let isRecording = false;
       let recordedSamples = [];
 
       connectBtn.addEventListener("click", async () => {
         try {
-          port = await navigator.serial.requestPort();
-          await port.open({ baudRate: 115200 });
+          if (!navigator.bluetooth) {
+            throw new Error("Web Bluetooth not supported");
+          }
+
+          statusDisplay.textContent = "Requesting device...";
+          device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [SERVICE_UUID] }],
+          });
+
+          statusDisplay.textContent = "Connecting...";
+          const server = await device.gatt.connect();
+          const service = await server.getPrimaryService(SERVICE_UUID);
+
+          charRx = await service.getCharacteristic(TX_CHAR_UUID);
+
+          await charRx.startNotifications();
+          charRx.addEventListener("characteristicvaluechanged", handleNotification);
+
+          device.addEventListener("gattserverdisconnected", () => {
+            statusDisplay.textContent = "Disconnected";
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            recordBtn.disabled = true;
+            stopBtn.disabled = true;
+            isRecording = false;
+          });
 
           statusDisplay.textContent = "Connected";
           connectBtn.disabled = true;
           disconnectBtn.disabled = false;
           recordBtn.disabled = false;
-
-          const textDecoder = new TextDecoderStream();
-          inputDone = port.readable.pipeTo(textDecoder.writable);
-          inputStream = textDecoder.readable;
-
-          reader = inputStream.getReader();
-          readLoop();
         } catch (err) {
           console.error("Error:", err);
           statusDisplay.textContent = "Error: " + err.message;
         }
       });
 
-      disconnectBtn.addEventListener("click", async () => {
-        if (reader) {
-          await reader.cancel();
-          await inputDone.catch(() => {});
-          reader = null;
-          inputDone = null;
-        }
-        if (port) {
-          await port.close();
-          port = null;
+      disconnectBtn.addEventListener("click", () => {
+        if (device && device.gatt.connected) {
+          device.gatt.disconnect();
         }
         statusDisplay.textContent = "Disconnected";
         connectBtn.disabled = false;
@@ -98,30 +109,21 @@
         createWavFile(recordedSamples);
       });
 
-      async function readLoop() {
-        let buffer = "";
+      function handleNotification(event) {
+        // Decode binary data as 16-bit signed integers (little-endian)
+        const dataView = new DataView(event.target.value.buffer);
+        const sampleCount = dataView.byteLength / 2;
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
+        for (let i = 0; i < sampleCount; i++) {
+          const sample = dataView.getInt16(i * 2, true); // little-endian
 
-          buffer += value;
-          let lines = buffer.split(/\r?\n/);
-          buffer = lines.pop();
-
-          for (const line of lines) {
-            if (line.trim() !== "") {
-              const val = parseInt(line.trim());
-              console.log(val);
-
-              if (isRecording && !isNaN(val)) {
-                recordedSamples.push(val);
-                if (recordedSamples.length % 100 === 0) {
-                  sampleCountDisplay.textContent = recordedSamples.length;
-                }
-              }
-            }
+          if (isRecording) {
+            recordedSamples.push(sample);
           }
+        }
+
+        if (isRecording && recordedSamples.length % 1000 < sampleCount) {
+          sampleCountDisplay.textContent = recordedSamples.length;
         }
       }
 

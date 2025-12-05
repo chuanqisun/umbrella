@@ -1,9 +1,9 @@
 import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
 import { connectSerial, disconnectSerial, setDataCallback } from "./serial.js";
-import { ThermalRenderer } from "./thermal.js";
-import { ThermalRecorder } from "./thermal-recorder.js";
 import { ThermalPlayer } from "./thermal-player.js";
+import { ThermalRecorder } from "./thermal-recorder.js";
+import { ThermalRenderer } from "./thermal.js";
 
 /**
  * AudioRecorderApp - Main application controller
@@ -72,7 +72,12 @@ class AudioRecorderApp {
     this.elements.stopBtn.addEventListener("click", () => this.stopRecording());
     this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
-    this.elements.rotateBtn.addEventListener("click", () => this.thermal.rotate());
+    this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
+  }
+
+  _rotateBoth() {
+    this.thermal.rotate();
+    this.playbackRenderer.rotate();
   }
 
   _updateTempRange() {

@@ -1,5 +1,6 @@
 import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
+import { connectSerial, disconnectSerial } from "./serial.js";
 
 /**
  * AudioRecorderApp - Main application controller
@@ -13,9 +14,12 @@ class AudioRecorderApp {
     this.elements = {
       connectBtn: document.getElementById("connectBtn"),
       disconnectBtn: document.getElementById("disconnectBtn"),
+      serialConnectBtn: document.getElementById("serialConnectBtn"),
+      serialDisconnectBtn: document.getElementById("serialDisconnectBtn"),
       recordBtn: document.getElementById("recordBtn"),
       stopBtn: document.getElementById("stopBtn"),
       status: document.getElementById("status"),
+      serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
       audioPlayer: document.getElementById("audioPlayer"),
     };
@@ -27,8 +31,28 @@ class AudioRecorderApp {
   _setupEventListeners() {
     this.elements.connectBtn.addEventListener("click", () => this.connect());
     this.elements.disconnectBtn.addEventListener("click", () => this.disconnect());
+    this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerialPort());
+    this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
     this.elements.recordBtn.addEventListener("click", () => this.startRecording());
     this.elements.stopBtn.addEventListener("click", () => this.stopRecording());
+  }
+
+  async connectSerialPort() {
+    const success = await connectSerial();
+    if (success) {
+      this.elements.serialStatus.textContent = "Connected";
+      this.elements.serialConnectBtn.disabled = true;
+      this.elements.serialDisconnectBtn.disabled = false;
+    }
+  }
+
+  async disconnectSerialPort() {
+    const success = await disconnectSerial();
+    if (success) {
+      this.elements.serialStatus.textContent = "Disconnected";
+      this.elements.serialConnectBtn.disabled = false;
+      this.elements.serialDisconnectBtn.disabled = true;
+    }
   }
 
   _setupBLECallbacks() {

@@ -115,10 +115,6 @@ class SerialConnection {
     this._reading = false;
   }
 
-  startMockData() {
-    fetch("./mock.data");
-  }
-
   stopMockData() {}
 }
 

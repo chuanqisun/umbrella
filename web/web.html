@@ -27,6 +27,7 @@
     <p>Serial Status: <span id="serialStatus">Disconnected</span></p>
     <p>Samples recorded: <span id="sampleCount">0</span></p>
 
+    <h3>Live Thermal View</h3>
     <canvas id="thermalCanvas" width="256" height="192" style="border: 1px solid #ccc; image-rendering: pixelated"></canvas>
     <br />
     <div>
@@ -37,7 +38,13 @@
       <button id="rotateBtn">Rotate 90°</button>
     </div>
     <br />
+    <p>Thermal frames recorded: <span id="frameCount">0</span></p>
+    
+    <h3>Playback</h3>
     <audio id="audioPlayer" controls></audio>
+    <br /><br />
+    <canvas id="playbackCanvas" width="256" height="192" style="border: 1px solid #ccc; image-rendering: pixelated"></canvas>
+    <p><em>Thermal playback syncs with audio player above</em></p>
 
     <script type="module" src="main.js"></script>
   </body>

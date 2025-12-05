@@ -2,6 +2,8 @@ import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
 import { connectSerial, disconnectSerial, setDataCallback } from "./serial.js";
 import { ThermalRenderer } from "./thermal.js";
+import { ThermalRecorder } from "./thermal-recorder.js";
+import { ThermalPlayer } from "./thermal-player.js";
 
 /**
  * AudioRecorderApp - Main application controller
@@ -22,14 +24,16 @@ class AudioRecorderApp {
       status: document.getElementById("status"),
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
+      frameCount: document.getElementById("frameCount"),
       audioPlayer: document.getElementById("audioPlayer"),
       thermalCanvas: document.getElementById("thermalCanvas"),
+      playbackCanvas: document.getElementById("playbackCanvas"),
       minTempInput: document.getElementById("minTempInput"),
       maxTempInput: document.getElementById("maxTempInput"),
       rotateBtn: document.getElementById("rotateBtn"),
     };
 
-    // Initialize thermal renderer
+    // Initialize thermal renderer for live view
     this.thermal = new ThermalRenderer(this.elements.thermalCanvas, {
       width: 32,
       height: 24,
@@ -37,6 +41,22 @@ class AudioRecorderApp {
       minTemp: parseFloat(this.elements.minTempInput.value),
       maxTemp: parseFloat(this.elements.maxTempInput.value),
     });
+
+    // Initialize thermal recorder
+    this.thermalRecorder = new ThermalRecorder();
+
+    // Initialize playback renderer
+    this.playbackRenderer = new ThermalRenderer(this.elements.playbackCanvas, {
+      width: 32,
+      height: 24,
+      cellSize: 8,
+      minTemp: parseFloat(this.elements.minTempInput.value),
+      maxTemp: parseFloat(this.elements.maxTempInput.value),
+    });
+
+    // Initialize thermal player
+    this.thermalPlayer = new ThermalPlayer(this.playbackRenderer, this.thermalRecorder);
+    this.thermalPlayer.bindAudio(this.elements.audioPlayer);
 
     this._setupEventListeners();
     this._setupBLECallbacks();
@@ -58,6 +78,8 @@ class AudioRecorderApp {
   _updateTempRange() {
     this.thermal.minTemp = parseFloat(this.elements.minTempInput.value);
     this.thermal.maxTemp = parseFloat(this.elements.maxTempInput.value);
+    this.playbackRenderer.minTemp = parseFloat(this.elements.minTempInput.value);
+    this.playbackRenderer.maxTemp = parseFloat(this.elements.maxTempInput.value);
   }
 
   async connectSerialPort() {
@@ -84,7 +106,13 @@ class AudioRecorderApp {
   }
 
   _setupSerialCallbacks() {
-    setDataCallback((values) => this.thermal.render(values));
+    setDataCallback((values) => {
+      this.thermal.render(values);
+      // Record thermal frames when recording
+      if (this.thermalRecorder.isRecording) {
+        this.thermalRecorder.addFrame(values);
+      }
+    });
   }
 
   async connect() {
@@ -104,7 +132,9 @@ class AudioRecorderApp {
 
   startRecording() {
     this.audio.startRecording();
+    this.thermalRecorder.startRecording();
     this.elements.sampleCount.textContent = "0";
+    this.elements.frameCount.textContent = "0";
     this.elements.audioPlayer.src = "";
     this._setUIState("recording");
     this._updateStatus("Recording...");
@@ -112,6 +142,7 @@ class AudioRecorderApp {
 
   stopRecording() {
     this.audio.stopRecording();
+    this.thermalRecorder.stopRecording();
     this._setUIState("connected");
     this._updateStatus("Stopped. Processing audio...");
     this._processAudio();
@@ -126,6 +157,7 @@ class AudioRecorderApp {
     // Update UI periodically (every ~1000 samples)
     if (this.audio.isRecording && this.audio.getSampleCount() % 1000 < samples.length) {
       this.elements.sampleCount.textContent = this.audio.getSampleCount();
+      this.elements.frameCount.textContent = this.thermalRecorder.getFrameCount();
     }
   }
 
@@ -138,7 +170,10 @@ class AudioRecorderApp {
   _processAudio() {
     const url = this.audio.createWavUrl();
     this.elements.audioPlayer.src = url;
-    this._updateStatus("Audio loaded");
+    this.elements.frameCount.textContent = this.thermalRecorder.getFrameCount();
+    // Show first frame in playback canvas
+    this.thermalPlayer.renderFirstFrame();
+    this._updateStatus("Audio loaded. Play to see thermal replay.");
   }
 
   _updateStatus(message) {

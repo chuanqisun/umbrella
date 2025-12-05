@@ -4,6 +4,11 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+// External mock data declarations (defined in lib-01-mock-data.ino)
+extern const int mockDataFrameSize;
+extern const int mockDataFrameCount;
+extern float mockData[];
+
 // Nordic UART Service UUIDs
 #define UART_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define UART_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  // notify: ESP32 -> browser
@@ -19,6 +24,12 @@ bool oldDeviceConnected = false;
 const size_t BUFFER_SIZE = 64; // bytes
 uint8_t txBuffer[BUFFER_SIZE];
 size_t bufferIndex = 0;
+
+// Mock data streaming state
+int currentMockFrame = 0;
+int currentSampleInFrame = 0;
+unsigned long lastFrameTime = 0;
+const unsigned long FRAME_INTERVAL_MS = 1000; // 1 fps
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -80,6 +91,26 @@ void loop() {
   }
   if (deviceConnected && !oldDeviceConnected) {
     oldDeviceConnected = deviceConnected;
+  }
+
+  // Send mock data over serial at ~1 fps
+  unsigned long currentTime = millis();
+  if (currentTime - lastFrameTime >= FRAME_INTERVAL_MS) {
+    lastFrameTime = currentTime;
+    
+    // Send frame data with "data:" prefix
+    Serial.print("data:");
+    int frameStart = currentMockFrame * mockDataFrameSize;
+    for (int i = 0; i < mockDataFrameSize; i++) {
+      Serial.print(mockData[frameStart + i], 2);
+      if (i < mockDataFrameSize - 1) {
+        Serial.print(",");
+      }
+    }
+    Serial.println();
+    
+    // Move to next frame, loop around
+    currentMockFrame = (currentMockFrame + 1) % mockDataFrameCount;
   }
 
   // read a sample

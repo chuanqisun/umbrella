@@ -27,6 +27,16 @@
     <p>Serial Status: <span id="serialStatus">Disconnected</span></p>
     <p>Samples recorded: <span id="sampleCount">0</span></p>
 
+    <canvas id="thermalCanvas" width="256" height="192" style="border: 1px solid #ccc; image-rendering: pixelated"></canvas>
+    <br />
+    <div>
+      <label>Min Temp: <input type="number" id="minTempInput" value="26" step="1" /></label>
+    </br>
+      <label>Max Temp: <input type="number" id="maxTempInput" value="34" step="1" /></label>
+    </br>
+      <button id="rotateBtn">Rotate 90°</button>
+    </div>
+    <br />
     <audio id="audioPlayer" controls></audio>
 
     <script type="module" src="main.js"></script>

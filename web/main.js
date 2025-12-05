@@ -1,6 +1,7 @@
 import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
-import { connectSerial, disconnectSerial } from "./serial.js";
+import { connectSerial, disconnectSerial, setDataCallback } from "./serial.js";
+import { ThermalRenderer } from "./thermal.js";
 
 /**
  * AudioRecorderApp - Main application controller
@@ -22,10 +23,24 @@ class AudioRecorderApp {
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
       audioPlayer: document.getElementById("audioPlayer"),
+      thermalCanvas: document.getElementById("thermalCanvas"),
+      minTempInput: document.getElementById("minTempInput"),
+      maxTempInput: document.getElementById("maxTempInput"),
+      rotateBtn: document.getElementById("rotateBtn"),
     };
+
+    // Initialize thermal renderer
+    this.thermal = new ThermalRenderer(this.elements.thermalCanvas, {
+      width: 32,
+      height: 24,
+      cellSize: 8,
+      minTemp: parseFloat(this.elements.minTempInput.value),
+      maxTemp: parseFloat(this.elements.maxTempInput.value),
+    });
 
     this._setupEventListeners();
     this._setupBLECallbacks();
+    this._setupSerialCallbacks();
   }
 
   _setupEventListeners() {
@@ -35,6 +50,14 @@ class AudioRecorderApp {
     this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
     this.elements.recordBtn.addEventListener("click", () => this.startRecording());
     this.elements.stopBtn.addEventListener("click", () => this.stopRecording());
+    this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
+    this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
+    this.elements.rotateBtn.addEventListener("click", () => this.thermal.rotate());
+  }
+
+  _updateTempRange() {
+    this.thermal.minTemp = parseFloat(this.elements.minTempInput.value);
+    this.thermal.maxTemp = parseFloat(this.elements.maxTempInput.value);
   }
 
   async connectSerialPort() {
@@ -58,6 +81,10 @@ class AudioRecorderApp {
   _setupBLECallbacks() {
     this.ble.setDataCallback((buffer) => this._handleAudioData(buffer));
     this.ble.setDisconnectCallback(() => this._handleDisconnect());
+  }
+
+  _setupSerialCallbacks() {
+    setDataCallback((values) => this.thermal.render(values));
   }
 
   async connect() {

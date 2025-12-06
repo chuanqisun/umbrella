@@ -9,6 +9,11 @@ extern const int mockDataFrameSize;
 extern const int mockDataFrameCount;
 extern float mockData[];
 
+// External audio functions (defined in lib-02-audio.ino)
+extern void audioResetState();
+extern bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic);
+extern void audioPrintDebugStats(unsigned long intervalMs);
+
 // Nordic UART Service UUIDs
 #define UART_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 #define UART_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  // notify: ESP32 -> browser
@@ -19,11 +24,6 @@ BLEServer* pServer = NULL;
 BLECharacteristic* pTxCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
-
-// Binary buffer for BLE transmission (16-bit samples)
-const size_t BUFFER_SIZE = 64; // bytes
-uint8_t txBuffer[BUFFER_SIZE];
-size_t bufferIndex = 0;
 
 // Mock data streaming state
 int currentMockFrame = 0;
@@ -90,7 +90,8 @@ void loop() {
     pServer->startAdvertising();
     Serial.println("debug:Restarting advertising");
     oldDeviceConnected = deviceConnected;
-    bufferIndex = 0;  // Reset buffer on disconnect
+    // Reset audio encoder state on disconnect
+    audioResetState();
   }
   if (deviceConnected && !oldDeviceConnected) {
     oldDeviceConnected = deviceConnected;
@@ -126,17 +127,12 @@ void loop() {
 
   if (sample && sample != -1 && sample != 1) {
     if (deviceConnected) {
-      // Store 16-bit sample as two bytes (little-endian)
-      int16_t s = (int16_t)sample;
-      txBuffer[bufferIndex++] = s & 0xFF;         // Low byte
-      txBuffer[bufferIndex++] = (s >> 8) & 0xFF;  // High byte
-
-      // Send when buffer is full
-      if (bufferIndex >= BUFFER_SIZE) {
-        pTxCharacteristic->setValue(txBuffer, BUFFER_SIZE);
-        pTxCharacteristic->notify();
-        bufferIndex = 0;
-      }
+      audioProcessSample((int16_t)sample, pTxCharacteristic);
     }
+  }
+  
+  // Debug output: packets per second (should be ~135 for 16kHz / 118 samples)
+  if (deviceConnected) {
+    audioPrintDebugStats(5000);
   }
 }

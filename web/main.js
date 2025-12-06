@@ -26,6 +26,9 @@ class AudioRecorderApp {
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
       samplesReceived: document.getElementById("samplesReceived"),
+      packetsReceived: document.getElementById("packetsReceived"),
+      packetsPerSec: document.getElementById("packetsPerSec"),
+      packetLoss: document.getElementById("packetLoss"),
       frameCount: document.getElementById("frameCount"),
       buttonCount: document.getElementById("buttonCount"),
       audioPlayer: document.getElementById("audioPlayer"),
@@ -35,6 +38,12 @@ class AudioRecorderApp {
       maxTempInput: document.getElementById("maxTempInput"),
       rotateBtn: document.getElementById("rotateBtn"),
     };
+
+    // Packet rate tracking
+    this.packetsThisSecond = 0;
+    this.totalPacketsReceived = 0;
+    this.lastPacketRateUpdate = Date.now();
+    setInterval(() => this._updatePacketRate(), 1000);
 
     // Initialize thermal renderer for live view
     this.thermal = new ThermalRenderer(this.elements.thermalCanvas, {
@@ -167,11 +176,18 @@ class AudioRecorderApp {
 
   _handleAudioData(buffer) {
     const samples = this.audio.parseSamples(buffer);
-    const previousCount = this.audio.getSampleCount();
 
-    // Track total samples received (regardless of recording state)
-    this.totalSamplesReceived = (this.totalSamplesReceived || 0) + samples.length;
-    this.elements.samplesReceived.textContent = this.totalSamplesReceived;
+    // Track packets received
+    this.packetsThisSecond++;
+    this.totalPacketsReceived++;
+    this.elements.packetsReceived.textContent = this.totalPacketsReceived;
+
+    // Track total samples decoded (regardless of recording state)
+    this.elements.samplesReceived.textContent = this.audio.getTotalSamplesDecoded();
+
+    // Update packet loss stats
+    const stats = this.audio.getStats();
+    this.elements.packetLoss.textContent = stats.lossRate;
 
     this.audio.addSamples(samples);
 
@@ -186,6 +202,11 @@ class AudioRecorderApp {
     this.audio.stopRecording();
     this._setUIState("disconnected");
     this._updateStatus("Disconnected");
+  }
+
+  _updatePacketRate() {
+    this.elements.packetsPerSec.textContent = this.packetsThisSecond;
+    this.packetsThisSecond = 0;
   }
 
   _processAudio() {

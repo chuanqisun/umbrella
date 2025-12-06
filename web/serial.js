@@ -3,11 +3,16 @@
 let port = null;
 let reader = null;
 let readableStreamClosed = null;
-let dataCallback = null;
+let thermalDataCallback = null;
+let buttonDataCallback = null;
 let lineBuffer = "";
 
-export function setDataCallback(callback) {
-  dataCallback = callback;
+export function setThermalDataCallback(callback) {
+  thermalDataCallback = callback;
+}
+
+export function setButtonDataCallback(callback) {
+  buttonDataCallback = callback;
 }
 
 export async function connectSerial() {
@@ -75,8 +80,19 @@ async function readSerialData() {
             if (trimmedLine.startsWith("data:")) {
               const dataStr = trimmedLine.substring(5); // Remove "data:" prefix
               const values = dataStr.split(",").map(Number);
-              if (dataCallback && values.length > 0) {
-                dataCallback(values);
+
+              // First value is button state, rest is thermal data
+              // Format: data:<button_state>,<heat_sensor_data_1>,...,<heat_sensor_data_768>
+              if (values.length > 1) {
+                const buttonState = values[0];
+                const thermalData = values.slice(1);
+
+                if (buttonDataCallback) {
+                  buttonDataCallback(buttonState);
+                }
+                if (thermalDataCallback && thermalData.length > 0) {
+                  thermalDataCallback(thermalData);
+                }
               }
             } else if (trimmedLine.startsWith("debug:")) {
               console.log("[ESP32]", trimmedLine.substring(6));

@@ -1,6 +1,7 @@
 import { AudioProcessor } from "./audio.js";
 import { BLEConnection } from "./ble.js";
-import { connectSerial, disconnectSerial, setDataCallback } from "./serial.js";
+import { setButtonCallback, updateButtonState } from "./btn.js";
+import { connectSerial, disconnectSerial, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { ThermalPlayer } from "./thermal-player.js";
 import { ThermalRecorder } from "./thermal-recorder.js";
 import { ThermalRenderer } from "./thermal.js";
@@ -25,6 +26,7 @@ class AudioRecorderApp {
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
       frameCount: document.getElementById("frameCount"),
+      buttonCount: document.getElementById("buttonCount"),
       audioPlayer: document.getElementById("audioPlayer"),
       thermalCanvas: document.getElementById("thermalCanvas"),
       playbackCanvas: document.getElementById("playbackCanvas"),
@@ -57,6 +59,11 @@ class AudioRecorderApp {
     // Initialize thermal player
     this.thermalPlayer = new ThermalPlayer(this.playbackRenderer, this.thermalRecorder);
     this.thermalPlayer.bindAudio(this.elements.audioPlayer);
+
+    // Setup button callback to update UI
+    setButtonCallback((state) => {
+      this.elements.buttonCount.textContent = state;
+    });
 
     this._setupEventListeners();
     this._setupBLECallbacks();
@@ -111,12 +118,16 @@ class AudioRecorderApp {
   }
 
   _setupSerialCallbacks() {
-    setDataCallback((values) => {
+    setThermalDataCallback((values) => {
       this.thermal.render(values);
       // Record thermal frames when recording
       if (this.thermalRecorder.isRecording) {
         this.thermalRecorder.addFrame(values);
       }
+    });
+
+    setButtonDataCallback((state) => {
+      updateButtonState(state);
     });
   }
 

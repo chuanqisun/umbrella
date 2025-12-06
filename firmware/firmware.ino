@@ -31,6 +31,9 @@ int currentSampleInFrame = 0;
 unsigned long lastFrameTime = 0;
 const unsigned long FRAME_INTERVAL_MS = 1000; // 1 fps
 
+// Mock button state (cycles 0-3)
+int mockButtonState = 0;
+
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
         deviceConnected = true;
@@ -98,7 +101,10 @@ void loop() {
   if (currentTime - lastFrameTime >= FRAME_INTERVAL_MS) {
     lastFrameTime = currentTime;
     // Send frame data with "data:" prefix
+    // Format: data:<button_state>,<heat_sensor_data_1>,...,<heat_sensor_data_768>
     Serial.print("data:");
+    Serial.print(mockButtonState);
+    Serial.print(",");
     int frameStart = currentMockFrame * mockDataFrameSize;
     for (int i = 0; i < mockDataFrameSize; i++) {
       Serial.print(mockData[frameStart + i], 2);
@@ -110,6 +116,9 @@ void loop() {
     
     // Move to next frame, loop around
     currentMockFrame = (currentMockFrame + 1) % mockDataFrameCount;
+    
+    // Cycle mock button state (0-3)
+    mockButtonState = (mockButtonState + 1) % 3;
   }
 
   // read a sample

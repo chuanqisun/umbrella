@@ -97,7 +97,6 @@ void loop() {
   unsigned long currentTime = millis();
   if (currentTime - lastFrameTime >= FRAME_INTERVAL_MS) {
     lastFrameTime = currentTime;
-    
     // Send frame data with "data:" prefix
     Serial.print("data:");
     int frameStart = currentMockFrame * mockDataFrameSize;

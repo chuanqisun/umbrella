@@ -25,6 +25,7 @@ class AudioRecorderApp {
       status: document.getElementById("status"),
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
+      samplesReceived: document.getElementById("samplesReceived"),
       frameCount: document.getElementById("frameCount"),
       buttonCount: document.getElementById("buttonCount"),
       audioPlayer: document.getElementById("audioPlayer"),
@@ -167,6 +168,10 @@ class AudioRecorderApp {
   _handleAudioData(buffer) {
     const samples = this.audio.parseSamples(buffer);
     const previousCount = this.audio.getSampleCount();
+
+    // Track total samples received (regardless of recording state)
+    this.totalSamplesReceived = (this.totalSamplesReceived || 0) + samples.length;
+    this.elements.samplesReceived.textContent = this.totalSamplesReceived;
 
     this.audio.addSamples(samples);
 

@@ -50,7 +50,7 @@ void setup() {
   Serial.begin(115200);
 
   // Initialize BLE
-  BLEDevice::init("ESP32-Audio");
+  BLEDevice::init("YANGSAN");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 

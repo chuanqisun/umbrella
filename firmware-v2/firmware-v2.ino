@@ -4,15 +4,23 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-// External mock data declarations (defined in lib-01-mock-data.ino)
-extern const int mockDataFrameSize;
-extern const int mockDataFrameCount;
-extern float mockData[];
+// External thermal sensor functions (defined in lib-01-thermal.ino)
+extern bool thermalInit();
+extern bool thermalIsReady();
+extern int thermalGetFrameSize();
+extern int thermalGetFPS();
+extern bool thermalReadFrame();
+extern float* thermalGetFrameData();
+extern void thermalSendFrame(int buttonState);
 
 // External audio functions (defined in lib-02-audio.ino)
 extern void audioResetState();
 extern bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic);
 extern void audioPrintDebugStats(unsigned long intervalMs);
+
+// External button functions (defined in lib-03-button.ino)
+extern void buttonInit();
+extern int buttonRead();
 
 // Nordic UART Service UUIDs
 #define UART_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
@@ -25,14 +33,33 @@ BLECharacteristic* pTxCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
-// Mock data streaming state
-int currentMockFrame = 0;
-int currentSampleInFrame = 0;
-unsigned long lastFrameTime = 0;
-const unsigned long FRAME_INTERVAL_MS = 1000; // 1 fps
+// Task handles
+TaskHandle_t thermalTaskHandle = NULL;
+TaskHandle_t audioTaskHandle = NULL;
 
-// Mock button state (cycles 0-3)
-int mockButtonState = 0;
+// Thermal task runs on Core 0 
+void thermalTask(void *pvParameters) {
+  for (;;) {
+    if (thermalIsReady()) {
+      if (thermalReadFrame()) {
+        int buttonState = buttonRead();
+        thermalSendFrame(buttonState);
+      }
+    }
+  }
+}
+
+// Audio task runs on Core 1 (time-critical, 16kHz sampling)
+void audioTask(void *pvParameters) {
+  for (;;) {
+    if (I2S.available()) {
+      int32_t sample = I2S.read();
+      if (deviceConnected) {
+        audioProcessSample((int16_t)sample, pTxCharacteristic);
+      }
+    }
+  }
+}
 
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
@@ -72,6 +99,12 @@ void setup() {
 
   Serial.println("debug:BLE advertising started");
 
+  // Initialize thermal sensor
+  thermalInit();
+
+  // Initialize touch buttons
+  buttonInit();
+
   // ESP32 S3 built-in pins
   // setup 42 PDM clock and 41 PDM data pins
   I2S.setPinsPdmRx(42, 41);
@@ -81,6 +114,28 @@ void setup() {
     Serial.println("debug:Failed to initialize I2S!");
     while (1); // do nothing
   }
+
+  // Create thermal task on Core 0 (lower priority, 1 fps)
+  xTaskCreatePinnedToCore(
+    thermalTask,          // Task function
+    "ThermalTask",        // Task name
+    4096,                 // Stack size (bytes)
+    NULL,                 // Parameters
+    1,                    // Priority (1 = low)
+    &thermalTaskHandle,   // Task handle
+    0                     // Core 0
+  );
+
+  // Create audio task on Core 1 (high priority, time-critical 16kHz)
+  xTaskCreatePinnedToCore(
+    audioTask,            // Task function
+    "AudioTask",          // Task name
+    4096,                 // Stack size (bytes)
+    NULL,                 // Parameters
+    2,                    // Priority (2 = higher than thermal)
+    &audioTaskHandle,     // Task handle
+    1                     // Core 1
+  );
 }
 
 void loop() {
@@ -97,42 +152,11 @@ void loop() {
     oldDeviceConnected = deviceConnected;
   }
 
-  // Send mock data over serial at ~1 fps
-  unsigned long currentTime = millis();
-  if (currentTime - lastFrameTime >= FRAME_INTERVAL_MS) {
-    lastFrameTime = currentTime;
-    // Send frame data with "data:" prefix
-    // Format: data:<button_state>,<heat_sensor_data_1>,...,<heat_sensor_data_768>
-    Serial.print("data:");
-    Serial.print(mockButtonState);
-    Serial.print(",");
-    int frameStart = currentMockFrame * mockDataFrameSize;
-    for (int i = 0; i < mockDataFrameSize; i++) {
-      Serial.print(mockData[frameStart + i], 2);
-      if (i < mockDataFrameSize - 1) {
-        Serial.print(",");
-      }
-    }
-    Serial.println();
-    
-    // Move to next frame, loop around
-    currentMockFrame = (currentMockFrame + 1) % mockDataFrameCount;
-    
-    // Cycle mock button state (0-3)
-    mockButtonState = (mockButtonState + 1) % 3;
-  }
-
-  // read a sample
-  int sample = I2S.read();
-
-  if (sample && sample != -1 && sample != 1) {
-    if (deviceConnected) {
-      audioProcessSample((int16_t)sample, pTxCharacteristic);
-    }
-  }
-  
   // Debug output: packets per second (should be ~135 for 16kHz / 118 samples)
   if (deviceConnected) {
     audioPrintDebugStats(5000);
   }
+
+  // Main loop can handle other lightweight tasks
+  vTaskDelay(10 / portTICK_PERIOD_MS);
 }

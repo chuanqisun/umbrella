@@ -54,29 +54,29 @@ export function resetButtonState() {
  */
 const STATE_CONFIG = {
   [AppState.EMPTY]: {
-    on: { BUTTON_TWO: AppState.WARMUP }
+    on: { BUTTON_TWO: AppState.WARMUP },
   },
   [AppState.WARMUP]: {
     delayedTransition: { target: AppState.RECORDING },
-    on: { BUTTON_RELEASE: AppState.EMPTY }
+    on: { BUTTON_RELEASE: AppState.EMPTY },
   },
   [AppState.RECORDING]: {
-    on: { BUTTON_RELEASE: AppState.COOLDOWN }
+    on: { BUTTON_RELEASE: AppState.COOLDOWN },
   },
   [AppState.COOLDOWN]: {
     delayedTransition: { target: AppState.LOADED },
-    on: { BUTTON_TWO: AppState.RECORDING }
+    on: { BUTTON_TWO: AppState.RECORDING },
   },
   [AppState.LOADED]: {
-    on: { BUTTON_TWO: AppState.REWARMUP }
+    on: { BUTTON_TWO: AppState.REWARMUP },
   },
   [AppState.REWARMUP]: {
     delayedTransition: { target: AppState.REPLAY },
-    on: { BUTTON_RELEASE: AppState.LOADED }
+    on: { BUTTON_RELEASE: AppState.LOADED },
   },
   [AppState.REPLAY]: {
-    on: { BUTTON_ZERO: AppState.EMPTY }
-  }
+    on: { BUTTON_ZERO: AppState.EMPTY },
+  },
 };
 
 /**

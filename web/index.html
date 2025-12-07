@@ -42,7 +42,8 @@
     <h3>Playback</h3>
     <audio id="audioPlayer" controls></audio>
     <br /><br />
-    <canvas id="playbackCanvas" width="256" height="192" style="border: 1px solid #ccc; image-rendering: pixelated"></canvas>
+    <video id="playbackVideo" width="256" height="192" controls style="border: 1px solid #ccc; background: black; image-rendering: pixelated" muted></video>
+    <canvas id="playbackCanvas" width="256" height="192" style="display: none"></canvas>
     <p><em>Thermal playback syncs with audio player above</em></p>
 
     <script type="module" src="main.js"></script>

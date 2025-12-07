@@ -1,5 +1,5 @@
 import { AudioProcessor } from "./audio.js";
-import { getButtonState, setButtonCallback, updateButtonState } from "./btn.js";
+import { setButtonCallback, updateButtonState } from "./btn.js";
 import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { ThermalPlayer } from "./thermal-player.js";
 import { ThermalRecorder } from "./thermal-recorder.js";
@@ -15,10 +15,10 @@ import { ThermalRenderer } from "./thermal.js";
  *   replay -> empty: when button count is NOT 2
  */
 const AppState = {
-  EMPTY: 'empty',
-  RECORDING: 'recording',
-  LOADED: 'loaded',
-  REPLAY: 'replay'
+  EMPTY: "empty",
+  RECORDING: "recording",
+  LOADED: "loaded",
+  REPLAY: "replay",
 };
 
 /**
@@ -46,6 +46,7 @@ class AudioRecorderApp {
       audioPlayer: document.getElementById("audioPlayer"),
       thermalCanvas: document.getElementById("thermalCanvas"),
       playbackCanvas: document.getElementById("playbackCanvas"),
+      playbackVideo: document.getElementById("playbackVideo"),
       minTempInput: document.getElementById("minTempInput"),
       maxTempInput: document.getElementById("maxTempInput"),
       rotateBtn: document.getElementById("rotateBtn"),
@@ -88,6 +89,9 @@ class AudioRecorderApp {
     this.thermalPlayer = new ThermalPlayer(this.playbackRenderer, this.thermalRecorder);
     this.thermalPlayer.bindAudio(this.elements.audioPlayer);
 
+    // Set up canvas-to-video streaming for playback
+    this._setupVideoStream();
+
     // Setup button callback to update UI and handle state transitions
     setButtonCallback((buttonCount) => {
       this.elements.buttonCount.textContent = buttonCount;
@@ -112,6 +116,36 @@ class AudioRecorderApp {
   _rotateBoth() {
     this.thermal.rotate();
     this.playbackRenderer.rotate();
+    // Update video dimensions to match rotated canvas
+    this.elements.playbackVideo.width = this.elements.playbackCanvas.width;
+    this.elements.playbackVideo.height = this.elements.playbackCanvas.height;
+  }
+
+  /**
+   * Set up canvas-to-video streaming
+   * Captures the playback canvas as a MediaStream and displays it in the video element
+   */
+  _setupVideoStream() {
+    // Capture canvas as a stream (30fps is enough for thermal data)
+    const stream = this.elements.playbackCanvas.captureStream(30);
+    this.elements.playbackVideo.srcObject = stream;
+
+    // Start playing the video stream (muted, so no user interaction needed)
+    this.elements.playbackVideo.play().catch(() => {
+      // Autoplay may be blocked, but that's okay - the video will start when user interacts
+    });
+
+    // Initialize with black frame
+    this._renderBlackFrame();
+  }
+
+  /**
+   * Render a black frame to the playback canvas (shows black in video)
+   */
+  _renderBlackFrame() {
+    const ctx = this.elements.playbackCanvas.getContext("2d");
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, this.elements.playbackCanvas.width, this.elements.playbackCanvas.height);
   }
 
   /**
@@ -120,7 +154,7 @@ class AudioRecorderApp {
    */
   _handleButtonStateChange(buttonCount) {
     const isTwo = buttonCount === 2;
-    
+
     switch (this.currentState) {
       case AppState.EMPTY:
         if (isTwo) {
@@ -153,9 +187,9 @@ class AudioRecorderApp {
     const oldState = this.currentState;
     this.currentState = newState;
     this._updateStateDisplay();
-    
+
     console.log(`State transition: ${oldState} -> ${newState}`);
-    
+
     // Execute actions based on new state
     switch (newState) {
       case AppState.EMPTY:
@@ -224,6 +258,8 @@ class AudioRecorderApp {
   _stopReplay() {
     this.elements.audioPlayer.pause();
     this.elements.audioPlayer.currentTime = 0;
+    // Show black frame when not playing
+    this._renderBlackFrame();
   }
 
   _updateTempRange() {

@@ -110,8 +110,8 @@ class AudioRecorderApp {
   _setupEventListeners() {
     this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerialPort());
     this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
-    this.elements.recordBtn.addEventListener("click", () => this.startRecording());
-    this.elements.stopBtn.addEventListener("click", () => this.stopRecording());
+    this.elements.recordBtn.addEventListener("click", () => this._transitionTo(AppState.RECORDING));
+    this.elements.stopBtn.addEventListener("click", () => this._transitionTo(AppState.LOADED));
     this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
@@ -121,9 +121,7 @@ class AudioRecorderApp {
   _rotateBoth() {
     this.thermal.rotate();
     this.playbackRenderer.rotate();
-    // Update video dimensions to match rotated canvas
-    this.elements.playbackVideo.width = this.elements.playbackCanvas.width;
-    this.elements.playbackVideo.height = this.elements.playbackCanvas.height;
+    // Video is now full-screen background, no need to update dimensions
   }
 
   /**
@@ -322,7 +320,6 @@ class AudioRecorderApp {
     this.elements.audioPlayer.src = "";
     this.elements.recordBtn.disabled = true;
     this.elements.stopBtn.disabled = false;
-    this.elements.serialStatus.textContent = "Recording...";
   }
 
   stopRecording() {
@@ -330,7 +327,6 @@ class AudioRecorderApp {
     this.thermalRecorder.stopRecording();
     this.elements.recordBtn.disabled = false;
     this.elements.stopBtn.disabled = true;
-    this.elements.serialStatus.textContent = "Connected - Processing...";
     this._processAudio();
   }
 
@@ -388,7 +384,6 @@ class AudioRecorderApp {
     this.elements.frameCount.textContent = this.thermalRecorder.getFrameCount();
     // Show first frame in playback canvas
     this.thermalPlayer.renderFirstFrame();
-    this.elements.serialStatus.textContent = "Connected - Audio ready";
   }
 }
 

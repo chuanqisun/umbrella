@@ -7,17 +7,26 @@ import { ThermalRenderer } from "./thermal.js";
 
 /**
  * App State Machine
- * States: empty, recording, loaded, replay
+ * States: empty, warmup, recording, cooldown, loaded, rewarmup, replay
  * Transitions:
- *   empty -> recording: when button count becomes 2
- *   recording -> loaded: when button count is NOT 2
- *   loaded -> replay: when button count is 2
- *   replay -> empty: when button count is NOT 2
+ *   empty -> warmup: when button count becomes 2 (starts recording)
+ *   warmup -> recording: after 1 second hold
+ *   warmup -> empty: if button released before 1 second (discards recording)
+ *   recording -> cooldown: when button count becomes < 2
+ *   cooldown -> loaded: after 1 second with button count < 2
+ *   cooldown -> recording: if button count becomes 2 before 1 second
+ *   loaded -> rewarmup: when button count becomes 2
+ *   rewarmup -> replay: after 1 second hold
+ *   rewarmup -> loaded: if button released before 1 second
+ *   replay -> empty: when button count is 0 or audio ends
  */
 const AppState = {
   EMPTY: "empty",
+  WARMUP: "warmup",
   RECORDING: "recording",
+  COOLDOWN: "cooldown",
   LOADED: "loaded",
+  REWARMUP: "rewarmup",
   REPLAY: "replay",
 };
 
@@ -54,7 +63,18 @@ class AudioRecorderApp {
       resetStateBtn: document.getElementById("resetStateBtn"),
       recorderFps: document.getElementById("recorderFps"),
       playerFps: document.getElementById("playerFps"),
+      volumeSlider: document.getElementById("volumeSlider"),
+      volumeValue: document.getElementById("volumeValue"),
     };
+
+    // Web Audio API for volume overamplification
+    this.audioContext = null;
+    this.gainNode = null;
+    this.mediaSource = null;
+
+    // Button hold timer for state transitions
+    this._buttonHoldTimer = null;
+    this._buttonHoldDuration = 1000; // 1 second
 
     // App state management
     this.currentState = AppState.EMPTY;
@@ -110,12 +130,52 @@ class AudioRecorderApp {
   _setupEventListeners() {
     this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerialPort());
     this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
-    this.elements.recordBtn.addEventListener("click", () => this._transitionTo(AppState.RECORDING));
+    this.elements.recordBtn.addEventListener("click", () => this._startManualRecording());
     this.elements.stopBtn.addEventListener("click", () => this._transitionTo(AppState.LOADED));
     this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
     this.elements.resetStateBtn.addEventListener("click", () => this._resetState());
+    this.elements.volumeSlider.addEventListener("input", () => this._updateVolume());
+
+    // Initialize audio context on first user interaction
+    this.elements.audioPlayer.addEventListener("play", () => this._initAudioContext(), { once: true });
+
+    // Exit replay state when audio ends
+    this.elements.audioPlayer.addEventListener("ended", () => {
+      if (this.currentState === AppState.REPLAY) {
+        this._transitionTo(AppState.EMPTY);
+      }
+    });
+  }
+
+  /**
+   * Initialize Web Audio API for volume overamplification
+   */
+  _initAudioContext() {
+    if (this.audioContext) return;
+
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    this.mediaSource = this.audioContext.createMediaElementSource(this.elements.audioPlayer);
+    this.gainNode = this.audioContext.createGain();
+
+    this.mediaSource.connect(this.gainNode);
+    this.gainNode.connect(this.audioContext.destination);
+
+    // Apply current volume setting
+    this._updateVolume();
+  }
+
+  /**
+   * Update volume based on slider value (supports overamplification)
+   */
+  _updateVolume() {
+    const value = parseInt(this.elements.volumeSlider.value);
+    this.elements.volumeValue.textContent = `${value}%`;
+
+    if (this.gainNode) {
+      this.gainNode.gain.value = value / 100;
+    }
   }
 
   _rotateBoth() {
@@ -153,33 +213,100 @@ class AudioRecorderApp {
 
   /**
    * Handle button state changes and trigger state transitions
+   * Uses WARMUP state for the 1-second confirmation period
    * @param {number} buttonCount - Current button count
    */
   _handleButtonStateChange(buttonCount) {
     const isTwo = buttonCount === 2;
 
+    // Clear any pending hold timer when button state changes
+    if (this._buttonHoldTimer) {
+      clearTimeout(this._buttonHoldTimer);
+      this._buttonHoldTimer = null;
+    }
+
     switch (this.currentState) {
       case AppState.EMPTY:
         if (isTwo) {
-          this._transitionTo(AppState.RECORDING);
+          // Start warmup (begins recording but not yet committed)
+          this._transitionTo(AppState.WARMUP);
+
+          // After 1 second, confirm and transition to recording
+          this._buttonHoldTimer = setTimeout(() => {
+            this._buttonHoldTimer = null;
+            // Only transition if still in warmup state (not cancelled by button release)
+            if (this.currentState === AppState.WARMUP) {
+              this._transitionTo(AppState.RECORDING);
+            }
+          }, this._buttonHoldDuration);
+        }
+        break;
+      case AppState.WARMUP:
+        if (!isTwo) {
+          // Button released before 1 second - discard and go back to empty
+          this._transitionTo(AppState.EMPTY);
         }
         break;
       case AppState.RECORDING:
         if (!isTwo) {
-          this._transitionTo(AppState.LOADED);
+          // Start cooldown period
+          this._transitionTo(AppState.COOLDOWN);
+
+          // After 1 second, confirm and transition to loaded
+          this._buttonHoldTimer = setTimeout(() => {
+            this._buttonHoldTimer = null;
+            // Only transition if still in cooldown state (not cancelled by button press)
+            if (this.currentState === AppState.COOLDOWN) {
+              this._transitionTo(AppState.LOADED);
+            }
+          }, this._buttonHoldDuration);
+        }
+        break;
+      case AppState.COOLDOWN:
+        if (isTwo) {
+          // Button pressed again before 1 second - go back to recording
+          this._transitionTo(AppState.RECORDING);
         }
         break;
       case AppState.LOADED:
         if (isTwo) {
-          this._transitionTo(AppState.REPLAY);
+          // Start rewarmup
+          this._transitionTo(AppState.REWARMUP);
+
+          // After 1 second, confirm and transition to replay
+          this._buttonHoldTimer = setTimeout(() => {
+            this._buttonHoldTimer = null;
+            // Only transition if still in rewarmup state (not cancelled by button release)
+            if (this.currentState === AppState.REWARMUP) {
+              this._transitionTo(AppState.REPLAY);
+            }
+          }, this._buttonHoldDuration);
+        }
+        break;
+      case AppState.REWARMUP:
+        if (!isTwo) {
+          // Button released before 1 second - go back to loaded
+          this._transitionTo(AppState.LOADED);
         }
         break;
       case AppState.REPLAY:
-        if (!isTwo) {
+        if (buttonCount === 0) {
           this._transitionTo(AppState.EMPTY);
         }
         break;
     }
+  } /**
+   * Discard the current recording without committing
+   */
+  _discardRecording() {
+    this.audio.stopRecording();
+    this.audio.clearRecording();
+    this.thermalRecorder.stopRecording();
+    this.thermalRecorder.clear();
+    this.elements.sampleCount.textContent = "0";
+    this.elements.frameCount.textContent = "0";
+    this.elements.recordBtn.disabled = false;
+    this.elements.stopBtn.disabled = true;
   }
 
   /**
@@ -196,21 +323,49 @@ class AudioRecorderApp {
     // Execute actions based on new state
     switch (newState) {
       case AppState.EMPTY:
-        this._stopRecording();
+        // If coming from WARMUP, discard the recording
+        if (oldState === AppState.WARMUP) {
+          this._discardRecording();
+        } else {
+          this._stopRecording();
+        }
         this._stopReplay();
         break;
-      case AppState.RECORDING:
+      case AppState.WARMUP:
         this._stopReplay();
         this._startRecording();
+        break;
+      case AppState.RECORDING:
+        // Start recording if coming from EMPTY (manual trigger)
+        // Do nothing if coming from WARMUP (already started)
+        if (oldState === AppState.EMPTY) {
+          this._stopReplay();
+          this._startRecording();
+        }
+        break;
+      case AppState.COOLDOWN:
+        // Still recording during cooldown, waiting for confirmation
         break;
       case AppState.LOADED:
         this._stopRecording();
         this._stopReplay();
         break;
+      case AppState.REWARMUP:
+        // Waiting for 1 second hold before replay, nothing to do yet
+        break;
       case AppState.REPLAY:
         this._stopRecording();
         this._startReplay();
         break;
+    }
+  }
+
+  /**
+   * Start recording manually from UI (bypasses warmup state)
+   */
+  _startManualRecording() {
+    if (this.currentState === AppState.EMPTY) {
+      this._transitionTo(AppState.RECORDING);
     }
   }
 

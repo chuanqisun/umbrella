@@ -29,6 +29,14 @@ export class Recorder {
     this._finalizeInterpolation();
   }
 
+  clear() {
+    this.frames = [];
+    this.interpolatedFrames = [];
+    this.isRecording = false;
+    this.startTime = 0;
+    this._fpsTracker.reset();
+  }
+
   /**
    * Add a thermal frame with timestamp
    * @param {number[]} values - Array of temperature values

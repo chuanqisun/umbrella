@@ -134,6 +134,24 @@
         gap: 8px;
       }
 
+      .volume-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .volume-controls input[type="range"] {
+        flex: 1;
+        min-width: 100px;
+      }
+
+      .volume-controls .volume-value {
+        min-width: 40px;
+        text-align: right;
+        font-family: monospace;
+        font-size: 12px;
+      }
+
       .pin-button {
         position: absolute;
         top: 16px;
@@ -182,6 +200,12 @@
       </div>
 
       <audio id="audioPlayer" controls></audio>
+
+      <div class="volume-controls">
+        <label>Volume</label>
+        <input type="range" id="volumeSlider" min="0" max="800" value="100" />
+        <span class="volume-value" id="volumeValue">100%</span>
+      </div>
 
       <div class="stats-panel">
         <div class="stat-row"><span class="stat-label">Serial:</span><span class="stat-value" id="serialStatus">Disconnected</span></div>

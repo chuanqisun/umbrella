@@ -54,6 +54,17 @@ class AudioProcessor {
     this.isRecording = false;
   }
 
+  clearRecording() {
+    this.recordedSamples = [];
+    this.adpcmPredicted = 0;
+    this.adpcmIndex = 0;
+    this.expectedSeq = 0;
+    this.lastSample = 0;
+    this.droppedPackets = 0;
+    this.totalPackets = 0;
+    this.totalSamplesDecoded = 0;
+  }
+
   addSamples(samples) {
     if (this.isRecording) {
       this.recordedSamples.push(...samples);

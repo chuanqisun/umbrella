@@ -58,26 +58,58 @@ export class ThermalRenderer {
           break;
       }
 
-      const gray = this._valueToGray(values[i]);
-      ctx.fillStyle = `rgb(${gray}, ${gray}, ${gray})`;
+      const color = this._valueToColor(values[i]);
+      ctx.fillStyle = color;
       ctx.fillRect(x, y, cellSize, cellSize);
     }
   }
 
   /**
-   * Convert temperature value to grayscale (0-255)
+   * Convert temperature value to color
+   * Gradient: black (cold) → purple → red → orange → yellow (hot)
    * @param {number} value - Temperature value
-   * @returns {number} Grayscale value 0-255
+   * @returns {string} CSS color string
    */
-  _valueToGray(value) {
+  _valueToColor(value) {
+    // Normalize value to 0-1 range
+    let t;
     if (value <= this.minTemp) {
-      return 0;
+      t = 0;
     } else if (value >= this.maxTemp) {
-      return 255;
+      t = 1;
     } else {
-      const range = this.maxTemp - this.minTemp;
-      return Math.round(((value - this.minTemp) / range) * 255);
+      t = (value - this.minTemp) / (this.maxTemp - this.minTemp);
     }
+
+    // Color stops: black(0) → purple(0.25) → red(0.5) → orange(0.75) → yellow(1)
+    const stops = [
+      { pos: 0, r: 0, g: 0, b: 0 },        // black
+      { pos: 0.25, r: 128, g: 0, b: 128 }, // purple
+      { pos: 0.5, r: 255, g: 0, b: 0 },    // red
+      { pos: 0.75, r: 255, g: 165, b: 0 }, // orange
+      { pos: 1, r: 255, g: 255, b: 0 },    // yellow
+    ];
+
+    // Find the two stops to interpolate between
+    let lower = stops[0];
+    let upper = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i].pos && t <= stops[i + 1].pos) {
+        lower = stops[i];
+        upper = stops[i + 1];
+        break;
+      }
+    }
+
+    // Interpolate between the two stops
+    const range = upper.pos - lower.pos;
+    const localT = range === 0 ? 0 : (t - lower.pos) / range;
+
+    const r = Math.round(lower.r + (upper.r - lower.r) * localT);
+    const g = Math.round(lower.g + (upper.g - lower.g) * localT);
+    const b = Math.round(lower.b + (upper.b - lower.b) * localT);
+
+    return `rgb(${r}, ${g}, ${b})`;
   }
 
   /**

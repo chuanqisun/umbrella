@@ -7,6 +7,7 @@
 // MLX90640 sensor instance
 Adafruit_MLX90640 mlx;
 bool mlxReady = false;
+bool mlxMockMode = false;  // Fallback mode when no sensor present
 
 // Thermal frame buffer (768 pixels = 32x24)
 const int thermalFrameSize = 32 * 24;
@@ -23,7 +24,7 @@ uint8_t thermalBinaryBuffer[thermalBinaryBufferSize];
 extern void serialWriteProtected(const uint8_t* data, size_t len);
 
 // Initialize MLX90640 thermal sensor
-// Returns true if initialization successful
+// Returns true if initialization successful (or mock mode enabled)
 bool thermalInit() {
   // I2C for MLX90640
   Wire.begin();              // XIAO default SDA=D4, SCL=D5
@@ -31,8 +32,14 @@ bool thermalInit() {
 
   if (!mlx.begin(0x33, &Wire)) {
     Serial.println("debug:ERR MLX90640 not found at 0x33");
+    Serial.println("debug:Fallback to mock thermal mode (0°C frames)");
     mlxReady = false;
-    return false;
+    mlxMockMode = true;
+    // Initialize frame buffer to 0°C
+    for (int i = 0; i < thermalFrameSize; i++) {
+      thermalFrame[i] = 0.0f;
+    }
+    return true;  // Return true to indicate thermal system is operational (in mock mode)
   }
   
   Serial.println("debug:MLX90640 OK");
@@ -41,12 +48,13 @@ bool thermalInit() {
   // https://github.com/adafruit/Adafruit_MLX90640/blob/master/Adafruit_MLX90640.h
   mlx.setRefreshRate(MLX90640_16_HZ);
   mlxReady = true;
+  mlxMockMode = false;
   return true;
 }
 
-// Check if thermal sensor is ready
+// Check if thermal sensor is ready (real or mock mode)
 bool thermalIsReady() {
-  return mlxReady;
+  return mlxReady || mlxMockMode;
 }
 
 // Get thermal frame size (number of pixels)
@@ -56,8 +64,14 @@ int thermalGetFrameSize() {
 
 
 // Read a new thermal frame
-// Returns true if frame read successful
+// Returns true if frame read successful (or in mock mode)
 bool thermalReadFrame() {
+  if (mlxMockMode) {
+    // In mock mode, frame is already filled with 0°C
+    // Add small delay to simulate sensor timing (~16Hz = 62.5ms)
+    vTaskDelay(62 / portTICK_PERIOD_MS);
+    return true;
+  }
   if (!mlxReady) {
     return false;
   }
@@ -74,7 +88,7 @@ float* thermalGetFrameData() {
 // Temperature is encoded as uint16_t: value = temp * 10 (0.0-40.0 -> 0-400)
 // Uses mutex-protected write for thread safety
 void thermalSendFrame() {
-  if (!mlxReady) {
+  if (!mlxReady && !mlxMockMode) {
     return;
   }
   

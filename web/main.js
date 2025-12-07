@@ -1,34 +1,10 @@
 import { AudioProcessor } from "./audio.js";
-import { setButtonCallback, updateButtonState } from "./btn.js";
+import { ButtonStateHandler, setButtonCallback, updateButtonState } from "./btn.js";
 import { Player } from "./player.js";
 import { Recorder } from "./recorder.js";
 import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
+import { AppState, StateMachine } from "./state.js";
 import { ThermalRenderer } from "./thermal.js";
-
-/**
- * App State Machine
- * States: empty, warmup, recording, cooldown, loaded, rewarmup, replay
- * Transitions:
- *   empty -> warmup: when button count becomes 2 (starts recording)
- *   warmup -> recording: after 1 second hold
- *   warmup -> empty: if button released before 1 second (discards recording)
- *   recording -> cooldown: when button count becomes < 2
- *   cooldown -> loaded: after 1 second with button count < 2
- *   cooldown -> recording: if button count becomes 2 before 1 second
- *   loaded -> rewarmup: when button count becomes 2
- *   rewarmup -> replay: after 1 second hold
- *   rewarmup -> loaded: if button released before 1 second
- *   replay -> empty: when button count is 0 or audio ends
- */
-const AppState = {
-  EMPTY: "empty",
-  WARMUP: "warmup",
-  RECORDING: "recording",
-  COOLDOWN: "cooldown",
-  LOADED: "loaded",
-  REWARMUP: "rewarmup",
-  REPLAY: "replay",
-};
 
 /**
  * AudioRecorderApp - Main application controller
@@ -72,13 +48,16 @@ class AudioRecorderApp {
     this.gainNode = null;
     this.mediaSource = null;
 
-    // Button hold timer for state transitions
-    this._buttonHoldTimer = null;
-    this._buttonHoldDuration = 1000; // 1 second
-
-    // App state management
-    this.currentState = AppState.EMPTY;
+    // App state management using StateMachine
+    this.stateMachine = new StateMachine((newState, oldState) => {
+      this._handleStateTransition(newState, oldState);
+    });
     this._updateStateDisplay();
+
+    // Button state handler with warmup/cooldown logic
+    this.buttonHandler = new ButtonStateHandler(this.stateMachine, {
+      holdDuration: 1000,
+    });
 
     // Packet rate tracking
     this.packetsThisSecond = 0;
@@ -120,7 +99,7 @@ class AudioRecorderApp {
     // Setup button callback to update UI and handle state transitions
     setButtonCallback((buttonCount) => {
       this.elements.buttonCount.textContent = buttonCount;
-      this._handleButtonStateChange(buttonCount);
+      this.buttonHandler.handleButtonStateChange(buttonCount);
     });
 
     this._setupEventListeners();
@@ -131,7 +110,7 @@ class AudioRecorderApp {
     this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerialPort());
     this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
     this.elements.recordBtn.addEventListener("click", () => this._startManualRecording());
-    this.elements.stopBtn.addEventListener("click", () => this._transitionTo(AppState.LOADED));
+    this.elements.stopBtn.addEventListener("click", () => this.stateMachine.transitionTo(AppState.LOADED));
     this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
@@ -143,8 +122,8 @@ class AudioRecorderApp {
 
     // Exit replay state when audio ends
     this.elements.audioPlayer.addEventListener("ended", () => {
-      if (this.currentState === AppState.REPLAY) {
-        this._transitionTo(AppState.EMPTY);
+      if (this.stateMachine.isInState(AppState.REPLAY)) {
+        this.stateMachine.transitionTo(AppState.EMPTY);
       }
     });
   }
@@ -212,90 +191,6 @@ class AudioRecorderApp {
   }
 
   /**
-   * Handle button state changes and trigger state transitions
-   * Uses WARMUP state for the 1-second confirmation period
-   * @param {number} buttonCount - Current button count
-   */
-  _handleButtonStateChange(buttonCount) {
-    const isTwo = buttonCount === 2;
-
-    // Clear any pending hold timer when button state changes
-    if (this._buttonHoldTimer) {
-      clearTimeout(this._buttonHoldTimer);
-      this._buttonHoldTimer = null;
-    }
-
-    switch (this.currentState) {
-      case AppState.EMPTY:
-        if (isTwo) {
-          // Start warmup (begins recording but not yet committed)
-          this._transitionTo(AppState.WARMUP);
-
-          // After 1 second, confirm and transition to recording
-          this._buttonHoldTimer = setTimeout(() => {
-            this._buttonHoldTimer = null;
-            // Only transition if still in warmup state (not cancelled by button release)
-            if (this.currentState === AppState.WARMUP) {
-              this._transitionTo(AppState.RECORDING);
-            }
-          }, this._buttonHoldDuration);
-        }
-        break;
-      case AppState.WARMUP:
-        if (!isTwo) {
-          // Button released before 1 second - discard and go back to empty
-          this._transitionTo(AppState.EMPTY);
-        }
-        break;
-      case AppState.RECORDING:
-        if (!isTwo) {
-          // Start cooldown period
-          this._transitionTo(AppState.COOLDOWN);
-
-          // After 1 second, confirm and transition to loaded
-          this._buttonHoldTimer = setTimeout(() => {
-            this._buttonHoldTimer = null;
-            // Only transition if still in cooldown state (not cancelled by button press)
-            if (this.currentState === AppState.COOLDOWN) {
-              this._transitionTo(AppState.LOADED);
-            }
-          }, this._buttonHoldDuration);
-        }
-        break;
-      case AppState.COOLDOWN:
-        if (isTwo) {
-          // Button pressed again before 1 second - go back to recording
-          this._transitionTo(AppState.RECORDING);
-        }
-        break;
-      case AppState.LOADED:
-        if (isTwo) {
-          // Start rewarmup
-          this._transitionTo(AppState.REWARMUP);
-
-          // After 1 second, confirm and transition to replay
-          this._buttonHoldTimer = setTimeout(() => {
-            this._buttonHoldTimer = null;
-            // Only transition if still in rewarmup state (not cancelled by button release)
-            if (this.currentState === AppState.REWARMUP) {
-              this._transitionTo(AppState.REPLAY);
-            }
-          }, this._buttonHoldDuration);
-        }
-        break;
-      case AppState.REWARMUP:
-        if (!isTwo) {
-          // Button released before 1 second - go back to loaded
-          this._transitionTo(AppState.LOADED);
-        }
-        break;
-      case AppState.REPLAY:
-        if (buttonCount === 0) {
-          this._transitionTo(AppState.EMPTY);
-        }
-        break;
-    }
-  } /**
    * Discard the current recording without committing
    */
   _discardRecording() {
@@ -310,15 +205,13 @@ class AudioRecorderApp {
   }
 
   /**
-   * Transition to a new state and execute appropriate actions
-   * @param {string} newState - The state to transition to
+   * Handle state transition callback from StateMachine
+   * Execute appropriate actions based on new state
+   * @param {string} newState - The new state
+   * @param {string} oldState - The previous state
    */
-  _transitionTo(newState) {
-    const oldState = this.currentState;
-    this.currentState = newState;
+  _handleStateTransition(newState, oldState) {
     this._updateStateDisplay();
-
-    console.log(`State transition: ${oldState} -> ${newState}`);
 
     // Execute actions based on new state
     switch (newState) {
@@ -364,8 +257,8 @@ class AudioRecorderApp {
    * Start recording manually from UI (bypasses warmup state)
    */
   _startManualRecording() {
-    if (this.currentState === AppState.EMPTY) {
-      this._transitionTo(AppState.RECORDING);
+    if (this.stateMachine.isInState(AppState.EMPTY)) {
+      this.stateMachine.transitionTo(AppState.RECORDING);
     }
   }
 
@@ -373,14 +266,14 @@ class AudioRecorderApp {
    * Update the state display in the UI
    */
   _updateStateDisplay() {
-    this.elements.appState.textContent = this.currentState;
+    this.elements.appState.textContent = this.stateMachine.currentState;
   }
 
   /**
    * Reset to empty state
    */
   _resetState() {
-    this._transitionTo(AppState.EMPTY);
+    this.stateMachine.reset();
   }
 
   /**

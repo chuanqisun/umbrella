@@ -1,7 +1,7 @@
 import { AudioProcessor } from "./audio.js";
 import { setButtonCallback, updateButtonState } from "./btn.js";
+import { Player } from "./player.js";
 import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
-import { ThermalPlayer } from "./thermal-player.js";
 import { ThermalRecorder } from "./thermal-recorder.js";
 import { ThermalRenderer } from "./thermal.js";
 
@@ -86,7 +86,7 @@ class AudioRecorderApp {
     });
 
     // Initialize thermal player
-    this.thermalPlayer = new ThermalPlayer(this.playbackRenderer, this.thermalRecorder);
+    this.thermalPlayer = new Player(this.playbackRenderer, this.thermalRecorder);
     this.thermalPlayer.bindAudio(this.elements.audioPlayer);
 
     // Set up canvas-to-video streaming for playback

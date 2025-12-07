@@ -1,7 +1,4 @@
-/**
- * ThermalPlayer - Plays back recorded thermal frames synchronized with audio
- */
-export class ThermalPlayer {
+export class Player {
   constructor(renderer, recorder) {
     this.renderer = renderer;
     this.recorder = recorder;

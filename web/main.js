@@ -104,6 +104,9 @@ class AudioRecorderApp {
 
     this._setupEventListeners();
     this._setupSerialCallbacks();
+
+    // Initialize display values from HTML defaults
+    this._updateVolumeDisplay();
   }
 
   _setupEventListeners() {
@@ -146,13 +149,21 @@ class AudioRecorderApp {
   }
 
   /**
+   * Update volume display only (for initialization)
+   */
+  _updateVolumeDisplay() {
+    const value = parseInt(this.elements.volumeSlider.value);
+    this.elements.volumeValue.textContent = `${value}%`;
+  }
+
+  /**
    * Update volume based on slider value (supports overamplification)
    */
   _updateVolume() {
-    const value = parseInt(this.elements.volumeSlider.value);
-    this.elements.volumeValue.textContent = `${value}%`;
+    this._updateVolumeDisplay();
 
     if (this.gainNode) {
+      const value = parseInt(this.elements.volumeSlider.value);
       this.gainNode.gain.value = value / 100;
     }
   }

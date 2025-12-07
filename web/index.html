@@ -10,6 +10,10 @@
         box-sizing: border-box;
       }
 
+      :root {
+        color-scheme: dark;
+      }
+
       body {
         font-family:
           system-ui,
@@ -38,13 +42,19 @@
 
       /* Control panel - left half */
       .control-panel {
-        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        position: fixed;
+        top: 0;
+        left: 0;
         width: 50%;
-        min-height: 100vh;
+        max-width: 24rem;
+        height: 100vh;
         padding: 16px;
-        background-color: white;
+        background-color: #222;
         z-index: 1;
-        overflow: auto;
+        overflow-y: auto;
         opacity: 0;
         transition: opacity 0.3s ease;
       }
@@ -53,17 +63,15 @@
         opacity: 1;
       }
 
-      .control-panel h3 {
-        margin-top: 16px;
-        margin-bottom: 8px;
+      .control-panel.pinned {
+        opacity: 1;
       }
 
       .control-panel p {
-        margin: 8px 0;
+        margin: 0;
       }
 
       .control-panel button {
-        margin-right: 8px;
         cursor: pointer;
       }
 
@@ -73,6 +81,9 @@
       }
 
       .stats-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
         background: rgba(0, 0, 0, 0.8);
         color: #0f0;
         font-family: monospace;
@@ -82,7 +93,10 @@
         border-radius: 4px;
         white-space: nowrap;
         width: 100%;
-        margin: 10px 0;
+      }
+
+      button {
+        padding: 4px;
       }
 
       .stats-panel .stat-row {
@@ -109,14 +123,33 @@
       }
 
       .button-group {
-        margin: 10px 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
       }
 
       .temp-controls {
-        margin: 10px 0;
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+
+      .pin-button {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        padding: 4px 8px;
+        cursor: pointer;
+        background: #444;
+        border: 1px solid #666;
+        color: #ccc;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+
+      .pin-button:hover {
+        background: #555;
+        color: #fff;
       }
     </style>
   </head>
@@ -126,7 +159,8 @@
     <canvas id="playbackCanvas" width="256" height="192"></canvas>
 
     <!-- Control panel (left half) -->
-    <div class="control-panel">
+    <div class="control-panel pinned">
+      <button class="pin-button" id="pinBtn">Unpin</button>
       <div class="button-group">
         <button id="serialConnectBtn">Connect Serial</button>
         <button id="serialDisconnectBtn" disabled>Disconnect Serial</button>
@@ -139,16 +173,14 @@
         <button id="rotateBtn">Rotate</button>
       </div>
 
-      <h3>Live Thermal View</h3>
       <canvas id="thermalCanvas" width="256" height="192"></canvas>
 
       <div class="temp-controls">
-        <label>Temp:</label>
+        <label>Heatmap</label>
         <input type="number" id="minTempInput" value="26" step="1" />
         <input type="number" id="maxTempInput" value="34" step="1" />
       </div>
 
-      <h3>Playback</h3>
       <audio id="audioPlayer" controls></audio>
 
       <div class="stats-panel">
@@ -167,5 +199,14 @@
     </div>
 
     <script type="module" src="main.js"></script>
+    <script>
+      const controlPanel = document.querySelector(".control-panel");
+      const pinBtn = document.getElementById("pinBtn");
+
+      pinBtn.addEventListener("click", () => {
+        controlPanel.classList.toggle("pinned");
+        pinBtn.textContent = controlPanel.classList.contains("pinned") ? "Unpin" : "Pin";
+      });
+    </script>
   </body>
 </html>

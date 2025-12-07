@@ -14,7 +14,7 @@ export class ThermalRenderer {
 
     // Pre-compute color lookup table for performance (256 entries)
     this._colorLUT = this._buildColorLUT(256);
-    
+
     // Pre-allocate ImageData for performance
     this._updateCanvasSize();
   }
@@ -26,7 +26,7 @@ export class ThermalRenderer {
    */
   _buildColorLUT(size) {
     const lut = new Uint8Array(size * 4);
-    
+
     // Color stops: black(0) → purple(0.25) → red(0.5) → orange(0.75) → yellow(1)
     const stops = [
       { pos: 0, r: 0, g: 0, b: 0 },
@@ -38,7 +38,7 @@ export class ThermalRenderer {
 
     for (let i = 0; i < size; i++) {
       const t = i / (size - 1);
-      
+
       // Find the two stops to interpolate between
       let lower = stops[0];
       let upper = stops[stops.length - 1];
@@ -59,7 +59,7 @@ export class ThermalRenderer {
       lut[idx + 2] = Math.round(lower.b + (upper.b - lower.b) * localT);
       lut[idx + 3] = 255; // Alpha
     }
-    
+
     return lut;
   }
 
@@ -67,13 +67,9 @@ export class ThermalRenderer {
    * Update canvas size and ImageData buffer
    */
   _updateCanvasSize() {
-    const outWidth = this.rotation === 90 || this.rotation === 270 
-      ? this.height * this.cellSize 
-      : this.width * this.cellSize;
-    const outHeight = this.rotation === 90 || this.rotation === 270 
-      ? this.width * this.cellSize 
-      : this.height * this.cellSize;
-    
+    const outWidth = this.rotation === 90 || this.rotation === 270 ? this.height * this.cellSize : this.width * this.cellSize;
+    const outHeight = this.rotation === 90 || this.rotation === 270 ? this.width * this.cellSize : this.height * this.cellSize;
+
     this.canvas.width = outWidth;
     this.canvas.height = outHeight;
     this._imageData = this.ctx.createImageData(outWidth, outHeight);
@@ -96,29 +92,29 @@ export class ThermalRenderer {
    */
   _bilinearInterpolate(values, x, y) {
     const { width, height } = this;
-    
+
     // Clamp coordinates
     x = Math.max(0, Math.min(width - 1, x));
     y = Math.max(0, Math.min(height - 1, y));
-    
+
     const x0 = Math.floor(x);
     const y0 = Math.floor(y);
     const x1 = Math.min(x0 + 1, width - 1);
     const y1 = Math.min(y0 + 1, height - 1);
-    
+
     const fx = x - x0;
     const fy = y - y0;
-    
+
     // Get four corner values
     const v00 = values[y0 * width + x0];
     const v10 = values[y0 * width + x1];
     const v01 = values[y1 * width + x0];
     const v11 = values[y1 * width + x1];
-    
+
     // Bilinear interpolation
     const v0 = v00 + (v10 - v00) * fx;
     const v1 = v01 + (v11 - v01) * fx;
-    
+
     return v0 + (v1 - v0) * fy;
   }
 
@@ -152,16 +148,16 @@ export class ThermalRenderer {
   _renderSmooth(values) {
     const { width, height, cellSize, rotation, _imageData, _colorLUT } = this;
     const data = _imageData.data;
-    
+
     const outWidth = _imageData.width;
     const outHeight = _imageData.height;
-    
+
     // Process each output pixel
     for (let outY = 0; outY < outHeight; outY++) {
       for (let outX = 0; outX < outWidth; outX++) {
         // Map output pixel back to source coordinates based on rotation
         let srcX, srcY;
-        
+
         switch (rotation) {
           case 0:
             srcX = (outX + 0.5) / cellSize - 0.5;
@@ -169,32 +165,32 @@ export class ThermalRenderer {
             break;
           case 90:
             srcX = (outY + 0.5) / cellSize - 0.5;
-            srcY = (height - 1) - ((outX + 0.5) / cellSize - 0.5);
+            srcY = height - 1 - ((outX + 0.5) / cellSize - 0.5);
             break;
           case 180:
-            srcX = (width - 1) - ((outX + 0.5) / cellSize - 0.5);
-            srcY = (height - 1) - ((outY + 0.5) / cellSize - 0.5);
+            srcX = width - 1 - ((outX + 0.5) / cellSize - 0.5);
+            srcY = height - 1 - ((outY + 0.5) / cellSize - 0.5);
             break;
           case 270:
-            srcX = (width - 1) - ((outY + 0.5) / cellSize - 0.5);
+            srcX = width - 1 - ((outY + 0.5) / cellSize - 0.5);
             srcY = (outX + 0.5) / cellSize - 0.5;
             break;
         }
-        
+
         // Get interpolated temperature
         const temp = this._bilinearInterpolate(values, srcX, srcY);
-        
+
         // Convert to color using LUT
         const lutIdx = this._tempToLUTIndex(temp) * 4;
         const pixelIdx = (outY * outWidth + outX) * 4;
-        
+
         data[pixelIdx] = _colorLUT[lutIdx];
         data[pixelIdx + 1] = _colorLUT[lutIdx + 1];
         data[pixelIdx + 2] = _colorLUT[lutIdx + 2];
         data[pixelIdx + 3] = 255;
       }
     }
-    
+
     this.ctx.putImageData(_imageData, 0, 0);
   }
 
@@ -205,14 +201,14 @@ export class ThermalRenderer {
   _renderPixelated(values) {
     const { width, height, cellSize, rotation, _imageData, _colorLUT } = this;
     const data = _imageData.data;
-    
+
     const outWidth = _imageData.width;
     const outHeight = _imageData.height;
-    
+
     for (let i = 0; i < values.length && i < width * height; i++) {
       const srcX = i % width;
       const srcY = Math.floor(i / width);
-      
+
       const lutIdx = this._tempToLUTIndex(values[i]) * 4;
       const r = _colorLUT[lutIdx];
       const g = _colorLUT[lutIdx + 1];
@@ -257,7 +253,7 @@ export class ThermalRenderer {
         }
       }
     }
-    
+
     this.ctx.putImageData(_imageData, 0, 0);
   }
 

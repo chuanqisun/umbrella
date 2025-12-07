@@ -1,3 +1,5 @@
+import { FpsTracker } from "./fps.js";
+
 export class Player {
   constructor(renderer, recorder) {
     this.renderer = renderer;
@@ -6,6 +8,13 @@ export class Player {
     this.isPlaying = false;
     this.animationFrameId = null;
     this.lastFrameIndex = -1;
+    this.lastRenderTime = -1;
+
+    // Pre-allocated interpolation buffer for performance
+    this._interpolationBuffer = null;
+
+    // FPS tracking for playback
+    this._fpsTracker = new FpsTracker();
   }
 
   /**
@@ -37,6 +46,10 @@ export class Player {
   _startPlayback() {
     this.isPlaying = true;
     this.lastFrameIndex = -1;
+
+    // Reset FPS tracking
+    this._fpsTracker.reset();
+
     this._animate();
   }
 
@@ -59,16 +72,56 @@ export class Player {
     if (!this.audioElement || this.recorder.getFrameCount() === 0) return;
 
     const currentTimeMs = this.audioElement.currentTime * 1000;
-    const frame = this.recorder.getFrameAtTime(currentTimeMs);
 
-    if (frame) {
-      // Only render if it's a different frame
-      const frameIndex = this.recorder.getFrames().indexOf(frame);
-      if (frameIndex !== this.lastFrameIndex) {
-        this.renderer.render(frame.values);
-        this.lastFrameIndex = frameIndex;
+    // Get the two nearest pre-interpolated frames and interpolate between them
+    // This gives us smooth 60fps+ playback
+    const framePair = this.recorder.getInterpolatedFramePair(currentTimeMs);
+
+    if (framePair) {
+      const { frameA, frameB, t } = framePair;
+
+      // If both frames are the same or t is 0, just render frameA
+      if (frameA === frameB || t === 0) {
+        this.renderer.render(frameA.values);
+      } else {
+        // Real-time interpolation between the two nearest pre-calculated frames
+        const interpolatedValues = this._lerpValues(frameA.values, frameB.values, t);
+        this.renderer.render(interpolatedValues);
       }
+
+      this.lastRenderTime = currentTimeMs;
+
+      // Update FPS calculation
+      this._fpsTracker.tick();
     }
+  }
+
+  /**
+   * Linear interpolation between two value arrays
+   * @param {number[]} valuesA - First frame values
+   * @param {number[]} valuesB - Second frame values
+   * @param {number} t - Interpolation factor (0-1)
+   * @returns {number[]} Interpolated values
+   */
+  _lerpValues(valuesA, valuesB, t) {
+    // Reuse buffer for performance
+    if (!this._interpolationBuffer || this._interpolationBuffer.length !== valuesA.length) {
+      this._interpolationBuffer = new Float32Array(valuesA.length);
+    }
+
+    const result = this._interpolationBuffer;
+    for (let i = 0; i < valuesA.length; i++) {
+      result[i] = valuesA[i] + (valuesB[i] - valuesA[i]) * t;
+    }
+    return result;
+  }
+
+  /**
+   * Get current playback FPS (frames rendered per second)
+   * @returns {number} Current FPS
+   */
+  getFps() {
+    return this._fpsTracker.getFps();
   }
 
   /**

@@ -39,7 +39,7 @@ bool thermalInit() {
   mlx.setMode(MLX90640_CHESS);
   mlx.setResolution(MLX90640_ADC_18BIT);
   // https://github.com/adafruit/Adafruit_MLX90640/blob/master/Adafruit_MLX90640.h
-  mlx.setRefreshRate(MLX90640_32_HZ);
+  mlx.setRefreshRate(MLX90640_16_HZ);
   mlxReady = true;
   return true;
 }

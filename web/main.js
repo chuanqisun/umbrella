@@ -52,6 +52,8 @@ class AudioRecorderApp {
       rotateBtn: document.getElementById("rotateBtn"),
       appState: document.getElementById("appState"),
       resetStateBtn: document.getElementById("resetStateBtn"),
+      recorderFps: document.getElementById("recorderFps"),
+      playerFps: document.getElementById("playerFps"),
     };
 
     // App state management
@@ -63,6 +65,9 @@ class AudioRecorderApp {
     this.totalPacketsReceived = 0;
     this.lastPacketRateUpdate = Date.now();
     setInterval(() => this._updatePacketRate(), 1000);
+
+    // FPS display update (more frequent for smoother display)
+    setInterval(() => this._updateFpsDisplay(), 250);
 
     // Initialize thermal renderer for live view
     this.thermal = new ThermalRenderer(this.elements.thermalCanvas, {
@@ -365,6 +370,16 @@ class AudioRecorderApp {
   _updatePacketRate() {
     this.elements.packetsPerSec.textContent = this.packetsThisSecond;
     this.packetsThisSecond = 0;
+  }
+
+  _updateFpsDisplay() {
+    // Update recorder FPS
+    const recorderFps = this.thermalRecorder.getFps();
+    this.elements.recorderFps.textContent = recorderFps.toFixed(1);
+
+    // Update player FPS
+    const playerFps = this.thermalPlayer.getFps();
+    this.elements.playerFps.textContent = playerFps.toFixed(1);
   }
 
   _processAudio() {

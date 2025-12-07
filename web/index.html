@@ -37,14 +37,14 @@
       <button id="rotateBtn">Rotate 90°</button>
     </div>
     <br />
-    <p>Thermal frames recorded: <span id="frameCount">0</span></p>
+    <p>Thermal frames recorded: <span id="frameCount">0</span> <small>(Recorder FPS: <span id="recorderFps">0</span>)</small></p>
     
     <h3>Playback</h3>
     <audio id="audioPlayer" controls></audio>
     <br /><br />
     <video id="playbackVideo" width="256" height="192" controls style="border: 1px solid #ccc; background: black; image-rendering: pixelated" muted></video>
     <canvas id="playbackCanvas" width="256" height="192" style="display: none"></canvas>
-    <p><em>Thermal playback syncs with audio player above</em></p>
+    <p><em>Thermal playback syncs with audio player above</em> <small>(Player FPS: <span id="playerFps">0</span>)</small></p>
 
     <script type="module" src="main.js"></script>
   </body>

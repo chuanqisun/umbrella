@@ -75,7 +75,7 @@
         padding: 8px 10px;
         border-radius: 4px;
         white-space: nowrap;
-        width: fit-content;
+        width: 100%;
         margin: 10px 0;
       }
 
@@ -108,16 +108,9 @@
 
       .temp-controls {
         margin: 10px 0;
-      }
-
-      .temp-controls label {
-        display: block;
-        margin: 5px 0;
-      }
-
-      .playback-info {
-        font-style: italic;
-        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
     </style>
   </head>
@@ -154,17 +147,15 @@
         <div class="stat-row"><span class="stat-label">Player FPS:</span><span class="stat-value" id="playerFps">0</span></div>
       </div>
 
-      <h3>Live Thermal View</h3>
       <canvas id="thermalCanvas" width="256" height="192"></canvas>
 
       <div class="temp-controls">
-        <label>Min Temp: <input type="number" id="minTempInput" value="26" step="1" /></label>
-        <label>Max Temp: <input type="number" id="maxTempInput" value="34" step="1" /></label>
+        <label>Temp:</label>
+        <input type="number" id="minTempInput" value="26" step="1" />
+        <input type="number" id="maxTempInput" value="34" step="1" />
       </div>
 
-      <h3>Playback</h3>
       <audio id="audioPlayer" controls></audio>
-      <p class="playback-info">Thermal playback syncs with audio player above</p>
     </div>
 
     <script type="module" src="main.js"></script>

@@ -1,7 +1,4 @@
-/**
- * ThermalRecorder - Records thermal frames with timestamps for synchronized playback
- */
-export class ThermalRecorder {
+export class Recorder {
   constructor() {
     this.frames = [];
     this.isRecording = false;

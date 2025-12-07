@@ -1,9 +1,25 @@
 import { AudioProcessor } from "./audio.js";
-import { setButtonCallback, updateButtonState } from "./btn.js";
-import { connectSerial, disconnectSerial, isConnected, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
+import { getButtonState, setButtonCallback, updateButtonState } from "./btn.js";
+import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { ThermalPlayer } from "./thermal-player.js";
 import { ThermalRecorder } from "./thermal-recorder.js";
 import { ThermalRenderer } from "./thermal.js";
+
+/**
+ * App State Machine
+ * States: empty, recording, loaded, replay
+ * Transitions:
+ *   empty -> recording: when button count becomes 2
+ *   recording -> loaded: when button count is NOT 2
+ *   loaded -> replay: when button count is 2
+ *   replay -> empty: when button count is NOT 2
+ */
+const AppState = {
+  EMPTY: 'empty',
+  RECORDING: 'recording',
+  LOADED: 'loaded',
+  REPLAY: 'replay'
+};
 
 /**
  * AudioRecorderApp - Main application controller
@@ -33,7 +49,13 @@ class AudioRecorderApp {
       minTempInput: document.getElementById("minTempInput"),
       maxTempInput: document.getElementById("maxTempInput"),
       rotateBtn: document.getElementById("rotateBtn"),
+      appState: document.getElementById("appState"),
+      resetStateBtn: document.getElementById("resetStateBtn"),
     };
+
+    // App state management
+    this.currentState = AppState.EMPTY;
+    this._updateStateDisplay();
 
     // Packet rate tracking
     this.packetsThisSecond = 0;
@@ -66,9 +88,10 @@ class AudioRecorderApp {
     this.thermalPlayer = new ThermalPlayer(this.playbackRenderer, this.thermalRecorder);
     this.thermalPlayer.bindAudio(this.elements.audioPlayer);
 
-    // Setup button callback to update UI
-    setButtonCallback((state) => {
-      this.elements.buttonCount.textContent = state;
+    // Setup button callback to update UI and handle state transitions
+    setButtonCallback((buttonCount) => {
+      this.elements.buttonCount.textContent = buttonCount;
+      this._handleButtonStateChange(buttonCount);
     });
 
     this._setupEventListeners();
@@ -83,11 +106,124 @@ class AudioRecorderApp {
     this.elements.minTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.maxTempInput.addEventListener("input", () => this._updateTempRange());
     this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
+    this.elements.resetStateBtn.addEventListener("click", () => this._resetState());
   }
 
   _rotateBoth() {
     this.thermal.rotate();
     this.playbackRenderer.rotate();
+  }
+
+  /**
+   * Handle button state changes and trigger state transitions
+   * @param {number} buttonCount - Current button count
+   */
+  _handleButtonStateChange(buttonCount) {
+    const isTwo = buttonCount === 2;
+    
+    switch (this.currentState) {
+      case AppState.EMPTY:
+        if (isTwo) {
+          this._transitionTo(AppState.RECORDING);
+        }
+        break;
+      case AppState.RECORDING:
+        if (!isTwo) {
+          this._transitionTo(AppState.LOADED);
+        }
+        break;
+      case AppState.LOADED:
+        if (isTwo) {
+          this._transitionTo(AppState.REPLAY);
+        }
+        break;
+      case AppState.REPLAY:
+        if (!isTwo) {
+          this._transitionTo(AppState.EMPTY);
+        }
+        break;
+    }
+  }
+
+  /**
+   * Transition to a new state and execute appropriate actions
+   * @param {string} newState - The state to transition to
+   */
+  _transitionTo(newState) {
+    const oldState = this.currentState;
+    this.currentState = newState;
+    this._updateStateDisplay();
+    
+    console.log(`State transition: ${oldState} -> ${newState}`);
+    
+    // Execute actions based on new state
+    switch (newState) {
+      case AppState.EMPTY:
+        this._stopRecording();
+        this._stopReplay();
+        break;
+      case AppState.RECORDING:
+        this._stopReplay();
+        this._startRecording();
+        break;
+      case AppState.LOADED:
+        this._stopRecording();
+        this._stopReplay();
+        break;
+      case AppState.REPLAY:
+        this._stopRecording();
+        this._startReplay();
+        break;
+    }
+  }
+
+  /**
+   * Update the state display in the UI
+   */
+  _updateStateDisplay() {
+    this.elements.appState.textContent = this.currentState;
+  }
+
+  /**
+   * Reset to empty state
+   */
+  _resetState() {
+    this._transitionTo(AppState.EMPTY);
+  }
+
+  /**
+   * Internal method to start recording (called by state machine)
+   */
+  _startRecording() {
+    if (this.elements.recordBtn.disabled) return; // Can't record if not connected
+    this.startRecording();
+  }
+
+  /**
+   * Internal method to stop recording (called by state machine)
+   */
+  _stopRecording() {
+    if (this.audio.isRecording) {
+      this.stopRecording();
+    }
+  }
+
+  /**
+   * Internal method to start replay (called by state machine)
+   */
+  _startReplay() {
+    if (this.elements.audioPlayer.src) {
+      this.elements.audioPlayer.currentTime = 0;
+      this.elements.audioPlayer.play();
+    }
+  }
+
+  /**
+   * Internal method to stop replay (called by state machine)
+   */
+  _stopReplay() {
+    this.elements.audioPlayer.pause();
+    this.elements.audioPlayer.currentTime = 0;
   }
 
   _updateTempRange() {

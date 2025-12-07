@@ -13,11 +13,14 @@ const int thermalFrameSize = 32 * 24;
 float thermalFrame[32 * 24];
 
 // Binary serial output buffer
-// Format: Header (2 bytes) + Button state (1 byte) + Thermal data (768 * 2 bytes)
-// Total: 2 + 1 + 1536 = 1539 bytes
-const uint8_t BINARY_HEADER[2] = {0xAA, 0x55};
-const int binaryBufferSize = 1539;
-uint8_t binaryBuffer[binaryBufferSize];
+// Protocol: Header (0xCA 0x01) + Thermal data (768 * 2 bytes)
+// Total: 2 + 1536 = 1538 bytes
+const uint8_t THERMAL_HEADER[2] = {0xCA, 0x01};
+const int thermalBinaryBufferSize = 1538;
+uint8_t thermalBinaryBuffer[thermalBinaryBufferSize];
+
+// External serial write function with mutex protection
+extern void serialWriteProtected(const uint8_t* data, size_t len);
 
 // Initialize MLX90640 thermal sensor
 // Returns true if initialization successful
@@ -67,10 +70,10 @@ float* thermalGetFrameData() {
 }
 
 // Send thermal frame over serial as binary data
-// Format: Header (0xAA 0x55) + Button state (1 byte) + Thermal data (768 * uint16_t)
+// Protocol: Header (0xCA 0x01) + Thermal data (768 * uint16_t)
 // Temperature is encoded as uint16_t: value = temp * 10 (0.0-40.0 -> 0-400)
-// Uses pre-built buffer to avoid interleaved output with other tasks
-void thermalSendFrame(int buttonState) {
+// Uses mutex-protected write for thread safety
+void thermalSendFrame() {
   if (!mlxReady) {
     return;
   }
@@ -78,12 +81,9 @@ void thermalSendFrame(int buttonState) {
   // Build binary buffer
   int pos = 0;
   
-  // Header bytes
-  binaryBuffer[pos++] = BINARY_HEADER[0];
-  binaryBuffer[pos++] = BINARY_HEADER[1];
-  
-  // Button state (1 byte)
-  binaryBuffer[pos++] = (uint8_t)buttonState;
+  // Header bytes (0xCA = 'cam' marker, 0x01 = thermal type)
+  thermalBinaryBuffer[pos++] = THERMAL_HEADER[0];
+  thermalBinaryBuffer[pos++] = THERMAL_HEADER[1];
   
   // Thermal data as uint16_t little-endian
   for (int i = 0; i < thermalFrameSize; i++) {
@@ -94,10 +94,10 @@ void thermalSendFrame(int buttonState) {
     uint16_t encoded = (uint16_t)(temp * 10.0f + 0.5f); // Round to nearest
     
     // Little-endian: low byte first
-    binaryBuffer[pos++] = encoded & 0xFF;
-    binaryBuffer[pos++] = (encoded >> 8) & 0xFF;
+    thermalBinaryBuffer[pos++] = encoded & 0xFF;
+    thermalBinaryBuffer[pos++] = (encoded >> 8) & 0xFF;
   }
   
-  // Send entire frame atomically
-  Serial.write(binaryBuffer, binaryBufferSize);
+  // Send entire frame atomically with mutex protection
+  serialWriteProtected(thermalBinaryBuffer, thermalBinaryBufferSize);
 }

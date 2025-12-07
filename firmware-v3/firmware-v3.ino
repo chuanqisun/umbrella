@@ -1,8 +1,4 @@
 #include <ESP_I2S.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
 
 // External thermal sensor functions (defined in lib-01-thermal.ino)
 extern bool thermalInit();
@@ -11,27 +7,22 @@ extern int thermalGetFrameSize();
 extern int thermalGetFPS();
 extern bool thermalReadFrame();
 extern float* thermalGetFrameData();
-extern void thermalSendFrame(int buttonState);
+extern void thermalSendFrame();
 
 // External audio functions (defined in lib-02-audio.ino)
 extern void audioResetState();
-extern bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic);
+extern bool audioProcessSample(int16_t sample);
 extern void audioPrintDebugStats(unsigned long intervalMs);
 
 // External button functions (defined in lib-03-button.ino)
 extern void buttonInit();
 extern int buttonRead();
-
-// Nordic UART Service UUIDs
-#define UART_SERVICE_UUID "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
-#define UART_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  // notify: ESP32 -> browser
+extern void buttonSendState(int state);
 
 I2SClass I2S;
 
-BLEServer* pServer = NULL;
-BLECharacteristic* pTxCharacteristic = NULL;
-bool deviceConnected = false;
-bool oldDeviceConnected = false;
+// Serial mutex for thread-safe writes from multiple cores
+SemaphoreHandle_t serialMutex = NULL;
 
 // Task handles
 TaskHandle_t thermalTaskHandle = NULL;
@@ -42,8 +33,7 @@ void thermalTask(void *pvParameters) {
   for (;;) {
     if (thermalIsReady()) {
       if (thermalReadFrame()) {
-        int buttonState = buttonRead();
-        thermalSendFrame(buttonState);
+        thermalSendFrame();
       }
     }
   }
@@ -54,50 +44,37 @@ void audioTask(void *pvParameters) {
   for (;;) {
     if (I2S.available()) {
       int32_t sample = I2S.read();
-      if (deviceConnected) {
-        audioProcessSample((int16_t)sample, pTxCharacteristic);
-      }
+      audioProcessSample((int16_t)sample);
     }
   }
 }
 
-class MyServerCallbacks: public BLEServerCallbacks {
-    void onConnect(BLEServer* pServer) {
-        deviceConnected = true;
-        Serial.println("debug:Client connected");
-    }
+// Serial write helper with mutex protection
+void serialWriteProtected(const uint8_t* data, size_t len) {
+  if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE) {
+    Serial.write(data, len);
+    xSemaphoreGive(serialMutex);
+  }
+}
 
-    void onDisconnect(BLEServer* pServer) {
-        deviceConnected = false;
-        Serial.println("debug:Client disconnected");
-    }
-};
+void serialPrintlnProtected(const char* msg) {
+  if (xSemaphoreTake(serialMutex, portMAX_DELAY) == pdTRUE) {
+    Serial.println(msg);
+    xSemaphoreGive(serialMutex);
+  }
+}
 
 void setup() {
   Serial.begin(115200);
+  
+  // Create serial mutex for thread-safe writes
+  serialMutex = xSemaphoreCreateMutex();
+  if (serialMutex == NULL) {
+    Serial.println("debug:Failed to create serial mutex!");
+    while(1);
+  }
 
-  // Initialize BLE
-  BLEDevice::init("YANGSAN");
-  pServer = BLEDevice::createServer();
-  pServer->setCallbacks(new MyServerCallbacks());
-
-  BLEService* pService = pServer->createService(UART_SERVICE_UUID);
-
-  pTxCharacteristic = pService->createCharacteristic(
-      UART_TX_UUID,
-      BLECharacteristic::PROPERTY_NOTIFY
-  );
-  pTxCharacteristic->addDescriptor(new BLE2902());
-
-  pService->start();
-
-  BLEAdvertising* pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(UART_SERVICE_UUID);
-  pAdvertising->setScanResponse(false);
-  pAdvertising->setMinPreferred(0x0);
-  BLEDevice::startAdvertising();
-
-  Serial.println("debug:BLE advertising started");
+  Serial.println("debug:Serial-only mode started");
 
   // Initialize thermal sensor
   thermalInit();
@@ -115,7 +92,7 @@ void setup() {
     while (1); // do nothing
   }
 
-  // Create thermal task on Core 0 (lower priority, 1 fps)
+  // Create thermal task on Core 0 (lower priority, ~32 fps)
   xTaskCreatePinnedToCore(
     thermalTask,          // Task function
     "ThermalTask",        // Task name
@@ -138,24 +115,19 @@ void setup() {
   );
 }
 
+// Track button state for change detection
+int lastButtonState = -1;
+
 void loop() {
-  // Handle reconnection
-  if (!deviceConnected && oldDeviceConnected) {
-    delay(500);
-    pServer->startAdvertising();
-    Serial.println("debug:Restarting advertising");
-    oldDeviceConnected = deviceConnected;
-    // Reset audio encoder state on disconnect
-    audioResetState();
-  }
-  if (deviceConnected && !oldDeviceConnected) {
-    oldDeviceConnected = deviceConnected;
+  // Read and send button state on change (runs on main loop, Core 1)
+  int buttonState = buttonRead();
+  if (buttonState != lastButtonState) {
+    buttonSendState(buttonState);
+    lastButtonState = buttonState;
   }
 
   // Debug output: packets per second (should be ~135 for 16kHz / 118 samples)
-  if (deviceConnected) {
-    audioPrintDebugStats(5000);
-  }
+  audioPrintDebugStats(5000);
 
   // Main loop can handle other lightweight tasks
   vTaskDelay(10 / portTICK_PERIOD_MS);

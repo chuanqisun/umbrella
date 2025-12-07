@@ -9,11 +9,6 @@
     <h1>ESP32 Audio Recorder</h1>
 
     <div>
-      <button id="connectBtn">Connect BLE</button>
-      <button id="disconnectBtn" disabled>Disconnect BLE</button>
-    </div>
-    <br />
-    <div>
       <button id="serialConnectBtn">Connect Serial</button>
       <button id="serialDisconnectBtn" disabled>Disconnect Serial</button>
     </div>
@@ -23,7 +18,6 @@
       <button id="stopBtn" disabled>Stop</button>
     </div>
 
-    <p>BLE Status: <span id="status">Disconnected</span></p>
     <p>Serial Status: <span id="serialStatus">Disconnected</span></p>
     <p>Buttons Pressed: <span id="buttonCount">0</span></p>
     <p>Packets received: <span id="packetsReceived">0</span> <small>(<span id="packetsPerSec">0</span> pps, expected ~135)</small></p>

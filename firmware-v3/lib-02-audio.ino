@@ -1,5 +1,5 @@
 // lib-02-audio.ino
-// IMA ADPCM audio encoding for BLE transmission
+// IMA ADPCM audio encoding for Serial transmission
 
 // IMA ADPCM step size table
 const int16_t adpcmStepTable[89] = {
@@ -22,17 +22,21 @@ const int8_t adpcmIndexTable[16] = {
 int16_t adpcmPredicted = 0;
 int8_t adpcmIndex = 0;
 
-// Packet structure constants
+// Packet structure constants for Serial transmission
+// Protocol: Header (0xCA 0x02) + ADPCM packet (64 bytes)
+// ADPCM packet structure:
 // [0-1]: sequence number (uint16, little-endian)
 // [2-3]: ADPCM state BEFORE encoding: predicted value (int16, little-endian)
 // [4]:   ADPCM state BEFORE encoding: step index (uint8)
 // [5-63]: ADPCM data (59 bytes = 118 samples as 4-bit nibbles)
+const uint8_t AUDIO_HEADER[2] = {0xCA, 0x02};
 const size_t AUDIO_HEADER_SIZE = 5;
 const size_t AUDIO_ADPCM_DATA_SIZE = 59;  // 118 samples packed as nibbles
-const size_t AUDIO_BUFFER_SIZE = AUDIO_HEADER_SIZE + AUDIO_ADPCM_DATA_SIZE;  // 64 bytes
+const size_t AUDIO_PACKET_SIZE = AUDIO_HEADER_SIZE + AUDIO_ADPCM_DATA_SIZE;  // 64 bytes
+const size_t AUDIO_BUFFER_SIZE = 2 + AUDIO_PACKET_SIZE;  // Header + packet = 66 bytes
 const size_t AUDIO_SAMPLES_PER_PACKET = 118;
 
-// Audio transmission state
+// Audio transmission buffer (header + packet)
 uint8_t audioTxBuffer[AUDIO_BUFFER_SIZE];
 size_t audioSampleIndex = 0;  // Count of ADPCM bytes (2 samples per byte)
 uint16_t audioSequenceNumber = 0;
@@ -46,6 +50,10 @@ int8_t audioPacketStartIndex = 0;
 // Debug: packet counter for monitoring
 unsigned long audioLastDebugTime = 0;
 uint32_t audioPacketsSentSinceLastDebug = 0;
+
+// External serial write function with mutex protection
+extern void serialWriteProtected(const uint8_t* data, size_t len);
+extern void serialPrintlnProtected(const char* msg);
 
 /**
  * Encode a single 16-bit sample to 4-bit ADPCM nibble
@@ -101,10 +109,9 @@ void audioResetState() {
 /**
  * Process a single audio sample and send packet when buffer is full
  * @param sample 16-bit audio sample
- * @param pCharacteristic BLE characteristic to send data on
  * @return true if a packet was sent
  */
-bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic) {
+bool audioProcessSample(int16_t sample) {
     // Save ADPCM state at start of new packet (for decoder sync)
     if (audioSampleIndex == 0 && !audioHighNibble) {
         audioPacketStartPredicted = adpcmPredicted;
@@ -121,23 +128,28 @@ bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic) {
     } else {
         // Second nibble of byte (high nibble) - pack and store
         audioCurrentByte |= (nibble << 4);
-        audioTxBuffer[AUDIO_HEADER_SIZE + audioSampleIndex] = audioCurrentByte;
+        // Offset by 2 for protocol header, then 5 for ADPCM header
+        audioTxBuffer[2 + AUDIO_HEADER_SIZE + audioSampleIndex] = audioCurrentByte;
         audioSampleIndex++;
         audioHighNibble = false;
         
         // Send when ADPCM data buffer is full (118 samples = 59 bytes)
         if (audioSampleIndex >= AUDIO_ADPCM_DATA_SIZE) {
-            // Write header: sequence number (little-endian)
-            audioTxBuffer[0] = audioSequenceNumber & 0xFF;
-            audioTxBuffer[1] = (audioSequenceNumber >> 8) & 0xFF;
+            // Write protocol header (0xCA 0x02)
+            audioTxBuffer[0] = AUDIO_HEADER[0];
+            audioTxBuffer[1] = AUDIO_HEADER[1];
+            
+            // Write ADPCM packet header: sequence number (little-endian)
+            audioTxBuffer[2] = audioSequenceNumber & 0xFF;
+            audioTxBuffer[3] = (audioSequenceNumber >> 8) & 0xFF;
             
             // Write ADPCM state BEFORE encoding (allows decoder to sync correctly)
-            audioTxBuffer[2] = audioPacketStartPredicted & 0xFF;
-            audioTxBuffer[3] = (audioPacketStartPredicted >> 8) & 0xFF;
-            audioTxBuffer[4] = (uint8_t)audioPacketStartIndex;
+            audioTxBuffer[4] = audioPacketStartPredicted & 0xFF;
+            audioTxBuffer[5] = (audioPacketStartPredicted >> 8) & 0xFF;
+            audioTxBuffer[6] = (uint8_t)audioPacketStartIndex;
             
-            pCharacteristic->setValue(audioTxBuffer, AUDIO_BUFFER_SIZE);
-            pCharacteristic->notify();
+            // Send via serial with mutex protection
+            serialWriteProtected(audioTxBuffer, AUDIO_BUFFER_SIZE);
             
             audioSequenceNumber++;
             audioSampleIndex = 0;
@@ -154,13 +166,12 @@ bool audioProcessSample(int16_t sample, BLECharacteristic* pCharacteristic) {
  */
 void audioPrintDebugStats(unsigned long intervalMs) {
     if (millis() - audioLastDebugTime >= intervalMs) {
-        Serial.print("debug:packets_sent_");
-        Serial.print(intervalMs / 1000);
-        Serial.print("s=");
-        Serial.print(audioPacketsSentSinceLastDebug);
-        Serial.print(" (");
-        Serial.print(audioPacketsSentSinceLastDebug * 1000 / intervalMs);
-        Serial.println(" pps)");
+        char debugMsg[80];
+        snprintf(debugMsg, sizeof(debugMsg), "debug:packets_sent_%lus=%lu (%lu pps)",
+                 intervalMs / 1000,
+                 audioPacketsSentSinceLastDebug,
+                 audioPacketsSentSinceLastDebug * 1000 / intervalMs);
+        serialPrintlnProtected(debugMsg);
         audioPacketsSentSinceLastDebug = 0;
         audioLastDebugTime = millis();
     }

@@ -9,6 +9,17 @@
 int touchThreshold1 = 0;
 int touchThreshold2 = 0;
 
+// External serial write function with mutex protection
+extern void serialPrintlnProtected(const char* msg);
+
+// Send button state over serial
+// Format: "btn:<state>" where state is 0, 1, or 2
+void buttonSendState(int state) {
+  char msg[16];
+  snprintf(msg, sizeof(msg), "btn:%d", state);
+  serialPrintlnProtected(msg);
+}
+
 // Calibrate touch buttons by measuring baseline values
 // Should be called at startup with buttons NOT pressed
 void buttonCalibrate() {

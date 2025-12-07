@@ -1,28 +1,24 @@
 import { AudioProcessor } from "./audio.js";
-import { BLEConnection } from "./ble.js";
 import { setButtonCallback, updateButtonState } from "./btn.js";
-import { connectSerial, disconnectSerial, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
+import { connectSerial, disconnectSerial, isConnected, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { ThermalPlayer } from "./thermal-player.js";
 import { ThermalRecorder } from "./thermal-recorder.js";
 import { ThermalRenderer } from "./thermal.js";
 
 /**
  * AudioRecorderApp - Main application controller
+ * Uses Serial port for all communication (thermal, audio, button)
  */
 class AudioRecorderApp {
   constructor() {
-    this.ble = new BLEConnection();
     this.audio = new AudioProcessor();
 
     // DOM elements
     this.elements = {
-      connectBtn: document.getElementById("connectBtn"),
-      disconnectBtn: document.getElementById("disconnectBtn"),
       serialConnectBtn: document.getElementById("serialConnectBtn"),
       serialDisconnectBtn: document.getElementById("serialDisconnectBtn"),
       recordBtn: document.getElementById("recordBtn"),
       stopBtn: document.getElementById("stopBtn"),
-      status: document.getElementById("status"),
       serialStatus: document.getElementById("serialStatus"),
       sampleCount: document.getElementById("sampleCount"),
       samplesReceived: document.getElementById("samplesReceived"),
@@ -76,13 +72,10 @@ class AudioRecorderApp {
     });
 
     this._setupEventListeners();
-    this._setupBLECallbacks();
     this._setupSerialCallbacks();
   }
 
   _setupEventListeners() {
-    this.elements.connectBtn.addEventListener("click", () => this.connect());
-    this.elements.disconnectBtn.addEventListener("click", () => this.disconnect());
     this.elements.serialConnectBtn.addEventListener("click", () => this.connectSerialPort());
     this.elements.serialDisconnectBtn.addEventListener("click", () => this.disconnectSerialPort());
     this.elements.recordBtn.addEventListener("click", () => this.startRecording());
@@ -110,6 +103,7 @@ class AudioRecorderApp {
       this.elements.serialStatus.textContent = "Connected";
       this.elements.serialConnectBtn.disabled = true;
       this.elements.serialDisconnectBtn.disabled = false;
+      this.elements.recordBtn.disabled = false;
     }
   }
 
@@ -119,15 +113,13 @@ class AudioRecorderApp {
       this.elements.serialStatus.textContent = "Disconnected";
       this.elements.serialConnectBtn.disabled = false;
       this.elements.serialDisconnectBtn.disabled = true;
+      this.elements.recordBtn.disabled = true;
+      this.elements.stopBtn.disabled = true;
     }
   }
 
-  _setupBLECallbacks() {
-    this.ble.setDataCallback((buffer) => this._handleAudioData(buffer));
-    this.ble.setDisconnectCallback(() => this._handleDisconnect());
-  }
-
   _setupSerialCallbacks() {
+    // Thermal data callback
     setThermalDataCallback((values) => {
       this.thermal.render(values);
       // Record thermal frames when recording
@@ -136,24 +128,13 @@ class AudioRecorderApp {
       }
     });
 
+    // Button state callback
     setButtonDataCallback((state) => {
       updateButtonState(state);
     });
-  }
 
-  async connect() {
-    try {
-      await this.ble.connect((status) => this._updateStatus(status));
-      this._setUIState("connected");
-    } catch (err) {
-      console.error("Error:", err);
-      this._updateStatus("Error: " + err.message);
-    }
-  }
-
-  disconnect() {
-    this.ble.disconnect();
-    this._handleDisconnect();
+    // Audio data callback (replaces BLE audio)
+    setAudioDataCallback((buffer) => this._handleAudioData(buffer));
   }
 
   startRecording() {
@@ -162,15 +143,17 @@ class AudioRecorderApp {
     this.elements.sampleCount.textContent = "0";
     this.elements.frameCount.textContent = "0";
     this.elements.audioPlayer.src = "";
-    this._setUIState("recording");
-    this._updateStatus("Recording...");
+    this.elements.recordBtn.disabled = true;
+    this.elements.stopBtn.disabled = false;
+    this.elements.serialStatus.textContent = "Recording...";
   }
 
   stopRecording() {
     this.audio.stopRecording();
     this.thermalRecorder.stopRecording();
-    this._setUIState("connected");
-    this._updateStatus("Stopped. Processing audio...");
+    this.elements.recordBtn.disabled = false;
+    this.elements.stopBtn.disabled = true;
+    this.elements.serialStatus.textContent = "Connected - Processing...";
     this._processAudio();
   }
 
@@ -200,8 +183,11 @@ class AudioRecorderApp {
 
   _handleDisconnect() {
     this.audio.stopRecording();
-    this._setUIState("disconnected");
-    this._updateStatus("Disconnected");
+    this.elements.serialConnectBtn.disabled = false;
+    this.elements.serialDisconnectBtn.disabled = true;
+    this.elements.recordBtn.disabled = true;
+    this.elements.stopBtn.disabled = true;
+    this.elements.serialStatus.textContent = "Disconnected";
   }
 
   _updatePacketRate() {
@@ -215,36 +201,7 @@ class AudioRecorderApp {
     this.elements.frameCount.textContent = this.thermalRecorder.getFrameCount();
     // Show first frame in playback canvas
     this.thermalPlayer.renderFirstFrame();
-    this._updateStatus("Audio loaded. Play to see thermal replay.");
-  }
-
-  _updateStatus(message) {
-    this.elements.status.textContent = message;
-  }
-
-  _setUIState(state) {
-    const { connectBtn, disconnectBtn, recordBtn, stopBtn } = this.elements;
-
-    switch (state) {
-      case "disconnected":
-        connectBtn.disabled = false;
-        disconnectBtn.disabled = true;
-        recordBtn.disabled = true;
-        stopBtn.disabled = true;
-        break;
-      case "connected":
-        connectBtn.disabled = true;
-        disconnectBtn.disabled = false;
-        recordBtn.disabled = false;
-        stopBtn.disabled = true;
-        break;
-      case "recording":
-        connectBtn.disabled = true;
-        disconnectBtn.disabled = false;
-        recordBtn.disabled = true;
-        stopBtn.disabled = false;
-        break;
-    }
+    this.elements.serialStatus.textContent = "Connected - Audio ready";
   }
 }
 

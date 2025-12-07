@@ -47,7 +47,45 @@ export function resetButtonState() {
 }
 
 /**
+ * State configuration for delayed transitions
+ * Each state can define:
+ *   - delayedTransition: {target, delay} - auto-transition after delay
+ *   - on: {EVENT: targetState} - event-based transitions
+ */
+const STATE_CONFIG = {
+  [AppState.EMPTY]: {
+    on: { BUTTON_TWO: AppState.WARMUP }
+  },
+  [AppState.WARMUP]: {
+    delayedTransition: { target: AppState.RECORDING },
+    on: { BUTTON_RELEASE: AppState.EMPTY }
+  },
+  [AppState.RECORDING]: {
+    on: { BUTTON_RELEASE: AppState.COOLDOWN }
+  },
+  [AppState.COOLDOWN]: {
+    delayedTransition: { target: AppState.LOADED },
+    on: { BUTTON_TWO: AppState.RECORDING }
+  },
+  [AppState.LOADED]: {
+    on: { BUTTON_TWO: AppState.REWARMUP }
+  },
+  [AppState.REWARMUP]: {
+    delayedTransition: { target: AppState.REPLAY },
+    on: { BUTTON_RELEASE: AppState.LOADED }
+  },
+  [AppState.REPLAY]: {
+    on: { BUTTON_ZERO: AppState.EMPTY }
+  }
+};
+
+/**
  * ButtonStateHandler - Manages button-triggered state transitions with warmup/cooldown logic
+ *
+ * Uses a declarative state configuration where:
+ * - Delayed transitions are automatically started on state entry
+ * - Timers are automatically cancelled on state exit
+ * - This eliminates timer management bugs by design
  */
 export class ButtonStateHandler {
   /**
@@ -58,32 +96,58 @@ export class ButtonStateHandler {
   constructor(stateMachine, options = {}) {
     this._stateMachine = stateMachine;
     this._holdDuration = options.holdDuration ?? 1000;
-    this._holdTimer = null;
+    this._currentTimer = null;
   }
 
   /**
-   * Clear any pending hold timer
+   * Called when exiting a state - cleans up any pending timers
+   * This MUST be called before any state transition
    */
-  _clearTimer() {
-    if (this._holdTimer) {
-      clearTimeout(this._holdTimer);
-      this._holdTimer = null;
+  _onStateExit() {
+    if (this._currentTimer) {
+      clearTimeout(this._currentTimer);
+      this._currentTimer = null;
     }
   }
 
   /**
-   * Start a timer that transitions to targetState after holdDuration
-   * Only transitions if still in expectedState when timer fires
-   * @param {string} expectedState - State that must still be active for transition
-   * @param {string} targetState - State to transition to
+   * Called when entering a state - starts delayed transition if configured
+   * @param {string} state - The state being entered
    */
-  _startTimer(expectedState, targetState) {
-    this._holdTimer = setTimeout(() => {
-      this._holdTimer = null;
-      if (this._stateMachine.isInState(expectedState)) {
-        this._stateMachine.transitionTo(targetState);
-      }
-    }, this._holdDuration);
+  _onStateEnter(state) {
+    const config = STATE_CONFIG[state];
+    if (config?.delayedTransition) {
+      const { target } = config.delayedTransition;
+      this._currentTimer = setTimeout(() => {
+        this._currentTimer = null;
+        // Verify we're still in the expected state (defensive check)
+        if (this._stateMachine.isInState(state)) {
+          this._transitionTo(target);
+        }
+      }, this._holdDuration);
+    }
+  }
+
+  /**
+   * Perform a state transition with proper exit/enter lifecycle
+   * @param {string} targetState - The state to transition to
+   */
+  _transitionTo(targetState) {
+    this._onStateExit();
+    this._stateMachine.transitionTo(targetState);
+    this._onStateEnter(targetState);
+  }
+
+  /**
+   * Convert button count to event name
+   * @param {number} buttonCount - Current button count
+   * @returns {string|null} Event name or null
+   */
+  _buttonCountToEvent(buttonCount) {
+    if (buttonCount === 2) return "BUTTON_TWO";
+    if (buttonCount === 1) return "BUTTON_RELEASE";
+    if (buttonCount === 0) return "BUTTON_ZERO";
+    return null;
   }
 
   /**
@@ -91,66 +155,15 @@ export class ButtonStateHandler {
    * @param {number} buttonCount - Current button count
    */
   handleButtonStateChange(buttonCount) {
-    const isTwo = buttonCount === 2;
+    const event = this._buttonCountToEvent(buttonCount);
+    if (!event) return;
+
     const currentState = this._stateMachine.currentState;
+    const config = STATE_CONFIG[currentState];
+    const targetState = config?.on?.[event];
 
-    // Clear any pending hold timer when button state changes
-    this._clearTimer();
-
-    switch (currentState) {
-      case AppState.EMPTY:
-        if (isTwo) {
-          // Start warmup (begins recording but not yet committed)
-          this._stateMachine.transitionTo(AppState.WARMUP);
-          // After hold duration, confirm and transition to recording
-          this._startTimer(AppState.WARMUP, AppState.RECORDING);
-        }
-        break;
-
-      case AppState.WARMUP:
-        if (!isTwo) {
-          // Button released before confirmation - discard and go back to empty
-          this._stateMachine.transitionTo(AppState.EMPTY);
-        }
-        break;
-
-      case AppState.RECORDING:
-        if (!isTwo) {
-          // Start cooldown period
-          this._stateMachine.transitionTo(AppState.COOLDOWN);
-          // After hold duration, confirm and transition to loaded
-          this._startTimer(AppState.COOLDOWN, AppState.LOADED);
-        }
-        break;
-
-      case AppState.COOLDOWN:
-        if (isTwo) {
-          // Button pressed again before confirmation - go back to recording
-          this._stateMachine.transitionTo(AppState.RECORDING);
-        }
-        break;
-
-      case AppState.LOADED:
-        if (isTwo) {
-          // Start rewarmup
-          this._stateMachine.transitionTo(AppState.REWARMUP);
-          // After hold duration, confirm and transition to replay
-          this._startTimer(AppState.REWARMUP, AppState.REPLAY);
-        }
-        break;
-
-      case AppState.REWARMUP:
-        if (!isTwo) {
-          // Button released before confirmation - go back to loaded
-          this._stateMachine.transitionTo(AppState.LOADED);
-        }
-        break;
-
-      case AppState.REPLAY:
-        if (buttonCount === 0) {
-          this._stateMachine.transitionTo(AppState.EMPTY);
-        }
-        break;
+    if (targetState) {
+      this._transitionTo(targetState);
     }
   }
 
@@ -158,6 +171,6 @@ export class ButtonStateHandler {
    * Clean up resources
    */
   dispose() {
-    this._clearTimer();
+    this._onStateExit();
   }
 }

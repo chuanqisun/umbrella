@@ -83,11 +83,11 @@ export class ThermalRenderer {
 
     // Color stops: black(0) → purple(0.25) → red(0.5) → orange(0.75) → yellow(1)
     const stops = [
-      { pos: 0, r: 0, g: 0, b: 0 },        // black
+      { pos: 0, r: 0, g: 0, b: 0 }, // black
       { pos: 0.25, r: 128, g: 0, b: 128 }, // purple
-      { pos: 0.5, r: 255, g: 0, b: 0 },    // red
+      { pos: 0.5, r: 255, g: 0, b: 0 }, // red
       { pos: 0.75, r: 255, g: 165, b: 0 }, // orange
-      { pos: 1, r: 255, g: 255, b: 0 },    // yellow
+      { pos: 1, r: 255, g: 255, b: 0 }, // yellow
     ];
 
     // Find the two stops to interpolate between

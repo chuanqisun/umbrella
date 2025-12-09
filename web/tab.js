@@ -177,10 +177,22 @@ export class TabManager {
     #greenOverlay.visible {
       display: block;
     }
+
+    .bottom-vignette {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 40%;
+      background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 1) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
   <div id="greenOverlay"></div>
+  <div class="bottom-vignette"></div>
   <video id="playerVideo" muted autoplay></video>
 </body>
 </html>

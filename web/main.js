@@ -46,6 +46,7 @@ class AudioRecorderApp {
       openPlayerBtn: document.getElementById("openPlayerBtn"),
       testBtn: document.getElementById("testBtn"),
       greenOverlay: document.getElementById("greenOverlay"),
+      inputVolume: document.getElementById("inputVolume"),
     };
 
     // Web Audio API for volume overamplification
@@ -459,6 +460,19 @@ class AudioRecorderApp {
 
   _handleAudioData(buffer) {
     const samples = this.audio.parseSamples(buffer);
+
+    // Calculate RMS volume level, scaled by the UI volume setting
+    let sumSquares = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sumSquares += samples[i] * samples[i];
+    }
+    const rms = Math.sqrt(sumSquares / samples.length);
+    // Apply gain from volume slider
+    const gain = parseInt(this.elements.volumeSlider.value) / 100;
+    const scaledRms = rms * gain;
+    // Convert to dB (relative to max 16-bit value 32767)
+    const db = scaledRms > 0 ? 20 * Math.log10(scaledRms / 32767) : -Infinity;
+    this.elements.inputVolume.textContent = isFinite(db) ? `${db.toFixed(1)} dB` : "-∞ dB";
 
     // Track packets received
     this.packetsThisSecond++;

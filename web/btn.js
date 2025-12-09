@@ -145,7 +145,7 @@ export class ButtonStateHandler {
    */
   _buttonCountToEvent(buttonCount) {
     if (buttonCount === 2) return "BUTTON_TWO";
-    if (buttonCount === 1) return "BUTTON_RELEASE";
+    if (buttonCount === 1 || buttonCount === 0) return "BUTTON_RELEASE";
     if (buttonCount === 0) return "BUTTON_ZERO";
     return null;
   }

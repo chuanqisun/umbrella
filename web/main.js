@@ -5,6 +5,7 @@ import { Recorder } from "./recorder.js";
 import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { AppState, StateMachine } from "./state.js";
 import { TabManager } from "./tab.js";
+import { TestTone } from "./test-tone.js";
 import { ThermalRenderer } from "./thermal.js";
 
 /**
@@ -104,6 +105,9 @@ class AudioRecorderApp {
     this.tabManager = new TabManager();
     this.tabManager.setOnPlayerClosed(() => this._onPlayerWindowClosed());
 
+    // Initialize test tone for audio testing
+    this.testTone = new TestTone(440, 0.5);
+
     // Setup button callback to update UI and handle state transitions
     setButtonCallback((buttonCount) => {
       this.elements.buttonCount.textContent = buttonCount;
@@ -199,19 +203,21 @@ class AudioRecorderApp {
   }
 
   /**
-   * Show green overlay on the video player
+   * Show green overlay on the video player and play test tone
    */
   _showGreenOverlay() {
     this.elements.greenOverlay.classList.add("visible");
     this.tabManager.showGreenOverlay();
+    this.testTone.start();
   }
 
   /**
-   * Hide green overlay on the video player
+   * Hide green overlay on the video player and stop test tone
    */
   _hideGreenOverlay() {
     this.elements.greenOverlay.classList.remove("visible");
     this.tabManager.hideGreenOverlay();
+    this.testTone.stop();
   }
 
   /**

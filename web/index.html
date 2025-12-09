@@ -160,6 +160,13 @@
         font-family: monospace;
         font-size: 12px;
       }
+
+      .reminders {
+        margin: 0;
+        padding-left: 16px;
+        font-size: 14px;
+        color: #ccc;
+      }
     </style>
   </head>
   <body>
@@ -192,8 +199,8 @@
 
       <div class="volume-controls">
         <label>Volume</label>
-        <input type="range" id="volumeSlider" min="100" max="1600" step="100" value="400" />
-        <span class="volume-value" id="volumeValue">400%</span>
+        <input type="range" id="volumeSlider" min="100" max="1600" step="100" value="800" />
+        <span class="volume-value" id="volumeValue">800%</span>
       </div>
 
       <div class="stats-panel">
@@ -209,6 +216,12 @@
         <div class="stat-row"><span class="stat-label">Recorder FPS:</span><span class="stat-value" id="recorderFps">0</span></div>
         <div class="stat-row"><span class="stat-label">Player FPS:</span><span class="stat-value" id="playerFps">0</span></div>
       </div>
+
+      <ol class="reminders">
+        <li>Is player window maximized?</li>
+        <li>Is projector speaker working?</li>
+        <li>Is each touch sensor working?</li>
+      </ol>
     </div>
 
     <!-- Right pane - Video player -->

@@ -4,6 +4,7 @@ import { Player } from "./player.js";
 import { Recorder } from "./recorder.js";
 import { connectSerial, disconnectSerial, setAudioDataCallback, setButtonDataCallback, setThermalDataCallback } from "./serial.js";
 import { AppState, StateMachine } from "./state.js";
+import { TabManager } from "./tab.js";
 import { ThermalRenderer } from "./thermal.js";
 
 /**
@@ -41,6 +42,7 @@ class AudioRecorderApp {
       playerFps: document.getElementById("playerFps"),
       volumeSlider: document.getElementById("volumeSlider"),
       volumeValue: document.getElementById("volumeValue"),
+      openPlayerBtn: document.getElementById("openPlayerBtn"),
     };
 
     // Web Audio API for volume overamplification
@@ -96,6 +98,10 @@ class AudioRecorderApp {
     // Set up canvas-to-video streaming for playback
     this._setupVideoStream();
 
+    // Initialize tab manager for external player window
+    this.tabManager = new TabManager();
+    this.tabManager.setOnPlayerClosed(() => this._onPlayerWindowClosed());
+
     // Setup button callback to update UI and handle state transitions
     setButtonCallback((buttonCount) => {
       this.elements.buttonCount.textContent = buttonCount;
@@ -119,6 +125,7 @@ class AudioRecorderApp {
     this.elements.rotateBtn.addEventListener("click", () => this._rotateBoth());
     this.elements.resetStateBtn.addEventListener("click", () => this._resetState());
     this.elements.volumeSlider.addEventListener("input", () => this._updateVolume());
+    this.elements.openPlayerBtn.addEventListener("click", () => this._openPlayerWindow());
 
     // Initialize audio context on first user interaction
     this.elements.audioPlayer.addEventListener("play", () => this._initAudioContext(), { once: true });
@@ -175,13 +182,35 @@ class AudioRecorderApp {
   }
 
   /**
+   * Open the player in a separate window/tab
+   */
+  _openPlayerWindow() {
+    // Provide the stream to the tab manager
+    this.tabManager.setVideoStream(this.playbackStream);
+
+    const success = this.tabManager.openPlayer();
+    if (success) {
+      this.elements.openPlayerBtn.textContent = "Player Open in New Tab";
+      this.elements.openPlayerBtn.disabled = true;
+    }
+  }
+
+  /**
+   * Handle when the player window is closed
+   */
+  _onPlayerWindowClosed() {
+    this.elements.openPlayerBtn.textContent = "Open Player in New Tab";
+    this.elements.openPlayerBtn.disabled = false;
+  }
+
+  /**
    * Set up canvas-to-video streaming
    * Captures the playback canvas as a MediaStream and displays it in the video element
    */
   _setupVideoStream() {
     // Capture canvas as a stream (30fps is enough for thermal data)
-    const stream = this.elements.playbackCanvas.captureStream(30);
-    this.elements.playbackVideo.srcObject = stream;
+    this.playbackStream = this.elements.playbackCanvas.captureStream(30);
+    this.elements.playbackVideo.srcObject = this.playbackStream;
 
     // Start playing the video stream (muted, so no user interaction needed)
     this.elements.playbackVideo.play().catch(() => {

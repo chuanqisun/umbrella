@@ -89,11 +89,55 @@ export class Player {
         this.renderer.render(interpolatedValues);
       }
 
+      // Apply fade-in effect during first second (black overlay fading out)
+      this._applyFadeIn(currentTimeMs);
+
+      // Apply fade-out effect during last second (black overlay fading in)
+      this._applyFadeOut(currentTimeMs);
+
       this.lastRenderTime = currentTimeMs;
 
       // Update FPS calculation
       this._fpsTracker.tick();
     }
+  }
+
+  /**
+   * Apply fade-in effect by overlaying black with decreasing opacity
+   * @param {number} currentTimeMs - Current playback time in milliseconds
+   */
+  _applyFadeIn(currentTimeMs) {
+    const fadeInDuration = 1000; // 1 second fade-in
+    if (currentTimeMs < fadeInDuration) {
+      const opacity = 1 - currentTimeMs / fadeInDuration; // 1.0 → 0.0 over 1 second
+      this._drawBlackOverlay(opacity);
+    }
+  }
+
+  /**
+   * Apply fade-out effect by overlaying black with increasing opacity
+   * @param {number} currentTimeMs - Current playback time in milliseconds
+   */
+  _applyFadeOut(currentTimeMs) {
+    const fadeOutDuration = 1000; // 1 second fade-out
+    const totalDuration = this.recorder.getDuration();
+    const fadeOutStart = totalDuration - fadeOutDuration;
+
+    if (currentTimeMs > fadeOutStart && totalDuration > fadeOutDuration) {
+      const elapsed = currentTimeMs - fadeOutStart;
+      const opacity = elapsed / fadeOutDuration; // 0.0 → 1.0 over last second
+      this._drawBlackOverlay(opacity);
+    }
+  }
+
+  /**
+   * Draw a black overlay with the specified opacity
+   * @param {number} opacity - Opacity value (0-1)
+   */
+  _drawBlackOverlay(opacity) {
+    const ctx = this.renderer.canvas.getContext("2d");
+    ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+    ctx.fillRect(0, 0, this.renderer.canvas.width, this.renderer.canvas.height);
   }
 
   /**

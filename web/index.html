@@ -59,6 +59,22 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        position: relative;
+      }
+
+      .green-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: #00ff00;
+        display: none;
+        z-index: 10;
+      }
+
+      .green-overlay.visible {
+        display: block;
       }
 
       #playbackVideo {
@@ -161,6 +177,7 @@
         <button id="stopBtn" disabled>Stop</button>
         <button id="resetStateBtn">Reset</button>
         <button id="rotateBtn">Rotate</button>
+        <button id="testBtn">Test</button>
       </div>
 
       <canvas id="thermalCanvas" width="256" height="192"></canvas>
@@ -196,6 +213,7 @@
 
     <!-- Right pane - Video player -->
     <div class="player-panel">
+      <div id="greenOverlay" class="green-overlay"></div>
       <video id="playbackVideo" muted></video>
       <canvas id="playbackCanvas" width="256" height="192"></canvas>
     </div>

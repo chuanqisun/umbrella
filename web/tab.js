@@ -104,6 +104,28 @@ export class TabManager {
   }
 
   /**
+   * Show the green overlay in the player window
+   */
+  showGreenOverlay() {
+    if (!this.playerWindow || this.playerWindow.closed) return;
+    const overlay = this.playerWindow.document.getElementById("greenOverlay");
+    if (overlay) {
+      overlay.classList.add("visible");
+    }
+  }
+
+  /**
+   * Hide the green overlay in the player window
+   */
+  hideGreenOverlay() {
+    if (!this.playerWindow || this.playerWindow.closed) return;
+    const overlay = this.playerWindow.document.getElementById("greenOverlay");
+    if (overlay) {
+      overlay.classList.remove("visible");
+    }
+  }
+
+  /**
    * Build the player page HTML in the new window
    * @private
    */
@@ -131,6 +153,7 @@ export class TabManager {
       height: 100%;
       background: black;
       overflow: hidden;
+      position: relative;
     }
     
     #playerVideo {
@@ -139,9 +162,25 @@ export class TabManager {
       object-fit: cover;
       background: black;
     }
+
+    #greenOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #00ff00;
+      display: none;
+      z-index: 10;
+    }
+
+    #greenOverlay.visible {
+      display: block;
+    }
   </style>
 </head>
 <body>
+  <div id="greenOverlay"></div>
   <video id="playerVideo" muted autoplay></video>
 </body>
 </html>

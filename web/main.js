@@ -43,6 +43,8 @@ class AudioRecorderApp {
       volumeSlider: document.getElementById("volumeSlider"),
       volumeValue: document.getElementById("volumeValue"),
       openPlayerBtn: document.getElementById("openPlayerBtn"),
+      testBtn: document.getElementById("testBtn"),
+      greenOverlay: document.getElementById("greenOverlay"),
     };
 
     // Web Audio API for volume overamplification
@@ -126,6 +128,21 @@ class AudioRecorderApp {
     this.elements.resetStateBtn.addEventListener("click", () => this._resetState());
     this.elements.volumeSlider.addEventListener("input", () => this._updateVolume());
     this.elements.openPlayerBtn.addEventListener("click", () => this._openPlayerWindow());
+    this.elements.testBtn.addEventListener("mousedown", () => this._showGreenOverlay());
+    this.elements.testBtn.addEventListener("mouseup", () => this._hideGreenOverlay());
+    this.elements.testBtn.addEventListener("mouseleave", () => this._hideGreenOverlay());
+    this.elements.testBtn.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        this._showGreenOverlay();
+      }
+    });
+    this.elements.testBtn.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        this._hideGreenOverlay();
+      }
+    });
 
     // Initialize audio context on first user interaction
     this.elements.audioPlayer.addEventListener("play", () => this._initAudioContext(), { once: true });
@@ -179,6 +196,22 @@ class AudioRecorderApp {
     this.thermal.rotate();
     this.playbackRenderer.rotate();
     // Video is now full-screen background, no need to update dimensions
+  }
+
+  /**
+   * Show green overlay on the video player
+   */
+  _showGreenOverlay() {
+    this.elements.greenOverlay.classList.add("visible");
+    this.tabManager.showGreenOverlay();
+  }
+
+  /**
+   * Hide green overlay on the video player
+   */
+  _hideGreenOverlay() {
+    this.elements.greenOverlay.classList.remove("visible");
+    this.tabManager.hideGreenOverlay();
   }
 
   /**

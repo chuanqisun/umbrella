@@ -188,11 +188,47 @@ export class TabManager {
       pointer-events: none;
       z-index: 5;
     }
+
+    .top-vignette {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 10%;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 1) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .left-vignette {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 10%;
+      height: 100%;
+      background: linear-gradient(to left, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 1) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .right-vignette {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 10%;
+      height: 100%;
+      background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.3) 50%, rgba(0, 0, 0, 1) 100%);
+      pointer-events: none;
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
   <div id="greenOverlay"></div>
+  <div class="top-vignette"></div>
   <div class="bottom-vignette"></div>
+  <div class="left-vignette"></div>
+  <div class="right-vignette"></div>
   <video id="playerVideo" muted autoplay></video>
 </body>
 </html>
